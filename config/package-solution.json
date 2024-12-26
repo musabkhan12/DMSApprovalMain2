@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "dms-approval-client-side-solution",
+    "id": "95697c32-ecdd-42e5-89b0-f9230588b274",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.19.0"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "dms-approval description"
+      },
+      "longDescription": {
+        "default": "dms-approval description"
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "dms-approval Feature",
+        "description": "The feature that activates elements of the dms-approval solution.",
+        "id": "0f9f0334-9b0d-4283-a652-a20bad7d0730",
+        "version": "1.0.0.0"
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/dms-approval.sppkg"
+  }
+}

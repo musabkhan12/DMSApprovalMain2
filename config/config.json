@@ -1,0 +1,19 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "dmsapproval-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/dmsapproval/DmsapprovalWebPart.js",
+          "manifest": "./src/webparts/dmsapproval/DmsapprovalWebPart.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {
+    "DmsapprovalWebPartStrings": "lib/webparts/dmsapproval/loc/{locale}.js",
+    "ControlStrings": "node_modules/@pnp/spfx-controls-react/lib/loc/{locale}.js"
+  }
+}
