@@ -5,11 +5,15 @@ import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 
 // import Dmsapproval from './components/Dmsapproval';
 import { IDmsapprovalProps } from './components/IDmsapprovalProps';
+import { IArgDelegationProps } from './components/IArgDelegationProps';
+import ArgDelegation from './components/ArgDelegation';
+import ArgDelegationMaster from './components/ArgDelegationMaster';
 import DMSMyApproval from './components/MyApprovals';
 import { getSP } from './loc/pnpjsConfig';
 import MyApproval from './components/MAINAPP';
 // import MyRequest from './components/MyRequest';
 import MyRequest from './components/myrequestnamin';
+import DMSFolderApproval from './components/DMSFolderreqLog';
 
 export interface IDmsapprovalWebPartProps {
   description: string;
@@ -22,9 +26,12 @@ export default class DmsapprovalWebPart extends BaseClientSideWebPart<IDmsapprov
 
   public render(): void {
     const element: React.ReactElement<IDmsapprovalProps> = React.createElement(
-      MyRequest,
+      // ArgDelegationMaster,
+      // ArgDelegation,
+        // MyRequest,
       //  DMSMyApproval,
-        // MyApproval,
+      // DMSFolderApproval,
+           MyApproval,
           // MyRequest,
           // MyRequest,
         // / MyApproval,

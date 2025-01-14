@@ -94,41 +94,41 @@ export const getRequestListsData = async (_sp,status) => {
   let arr = []
 
 
-  await _sp.web.lists.getByTitle("AllRequestLists").items.filter(`Filter eq 'Automation'`).orderBy("Created", false).getAll()
+  // await _sp.web.lists.getByTitle("AllRequestLists").items.filter(`Filter eq 'Automation'`).orderBy("Created", false).getAll()
 
-    .then((res) => {
+  //   .then((res) => {
 
-      console.log("AllRequestLists", res);
+  //     console.log("AllRequestLists", res);
 
-      let AllRequestArr = [];
-
-
-      for (let i = 0; i < res.length; i++) {
-
-        getMyRequestsdata(_sp, res[i].Title,status).then((resData) => {
-
-          for (let j = 0; j < resData.length; j++) {
-
-            AllRequestArr.push(resData[j])
-
-          }
+  //     let AllRequestArr = [];
 
 
-        })
+  //     for (let i = 0; i < res.length; i++) {
 
-      }
+  //       getMyRequestsdata(_sp, res[i].Title,status).then((resData) => {
 
-      console.log("AllRequestArr", AllRequestArr);
+  //         for (let j = 0; j < resData.length; j++) {
 
-      arr = AllRequestArr;
+  //           AllRequestArr.push(resData[j])
 
-    })
+  //         }
 
-    .catch((error) => {
 
-      console.log("Error fetching data: ", error);
+  //       })
 
-    });
+  //     }
+
+  //     console.log("AllRequestArr", AllRequestArr);
+
+  //     arr = AllRequestArr;
+
+  //   })
+
+  //   .catch((error) => {
+
+  //     console.log("Error fetching data: ", error);
+
+  //   });
 
   return arr;
 
@@ -209,31 +209,47 @@ export const getMyRequest = async (sp, status) => {
     })
   return arr
 }
-export const getMyApproval = async (sp,status)=>
-
-  {
-
-    const currentUser = await sp.web.currentUser();
-
-    let arr = []
-
-    await sp.web.lists.getByTitle("ARGMyRequest").items.select("*,Requester/Id,Requester/Title,Approver/Id,Approver/Title").expand("Approver,Requester")
-
-    .filter(`ApproverId eq ${currentUser.Id} and Status eq '${status}'`)
-
-    .orderBy("Created",false)
-
-    .getAll().then((res) => {
-
-      arr = res
-
-      console.log(arr, 'arr');
-
-    })
-
-    return arr
-
+export const getMyApproval = async (sp, status, actingfor) => {
+  try {
+    // alert(`Actingfor is ${actingfor}`);
+    let arr = [];
+    
+    if (!actingfor) {
+      // alert(`Actingfor is null ${actingfor}`);
+      const currentUser = await sp.web.currentUser();
+      
+      arr = await sp.web.lists.getByTitle("ARGMyRequest").items.select("*,Requester/Id,Requester/Title,Approver/Id,Approver/Title", "Approver/EMail")
+        .expand("Approver,Requester")
+        .filter(`ApproverId eq ${currentUser.Id} and Status eq '${status}'`)
+        .orderBy("Created", false)
+        .getAll();
+        
+      console.log(arr, 'arr of intranet if actingfor is null');
+    } else {
+      // alert(`Actingfor is not null ${actingfor}`);
+      const user = await sp.web.siteUsers.getByEmail(actingfor)();
+      // alert(user.Id);
+      
+      if (user.Id) {
+        arr = await sp.web.lists.getByTitle("ARGMyRequest").items.select("*,Requester/Id,Requester/Title,Approver/Id,Approver/Title" ,"Approver/EMail")
+          .expand("Approver,Requester")
+          .filter(`ApproverId eq ${user.Id} and Status eq '${status}'`)
+          .orderBy("Created", false)
+          .getAll();
+        
+        console.log(arr, 'arr of intranet if actingfor is not null');
+      } else {
+        console.log("User not found in Approval");
+      }
+    }
+    
+    return arr;
+  } catch (error) {
+    console.error("Error fetching list items:", error);
+    return [];
   }
+};
+
   // export const gteDMSApproval = async(sp)=>{
   //   alert("DMS")
   //   const currentUser = await sp.web.currentUser();
@@ -292,7 +308,7 @@ export const getMyApproval = async (sp,status)=>
         //  alert(currentUser.Email)
         const filesData = await sp.web.lists
           .getByTitle(fileItem.FileMasterList)
-          .items.select("ID", "FileName", "FileUID", "FileSize", "FileVersion", "Status", "SiteID", "CurrentFolderPath", "DocumentLibraryName", "SiteName", "FilePreviewURL", "IsDeleted", "MyRequest" , "*")
+          .items.select("ID", "FileName", "FileUID", "FileSize", "FileVersion", "Status", "SiteID", "CurrentFolderPath", "DocumentLibraryName", "SiteName", "FilePreviewURL", "IsDeleted", "MyRequest" , "Processname", "RequestNo" ,  "*")
           .filter(`CurrentUser eq '${currentUser.Email}' and MyRequest eq 1 and Status eq '${value}'`)
           .orderBy("Modified", false)
           .getAll();
@@ -305,6 +321,29 @@ export const getMyApproval = async (sp,status)=>
       }
     }
   
+    const folderDeligationData = await sp.web.lists
+    .getByTitle("DMSFolderDeligationMaster")
+    .items.select("ID", "FileName", "FileUID", "Status" ,"CurrentUser" , "Processname"  ,"*")
+    .filter(`CurrentUser eq '${currentUser.Email}' and Status eq '${value}'`)
+    .orderBy("Modified", false)
+    .getAll();
+     console.log(folderDeligationData , "folderDeligationData")
+  folderDeligationData.forEach(item => {
+    arr.push({
+      FileUID : item.RequestNo,
+      FileName: item.DocumentLibraryName,
+      Processname: 'New Folder Request',
+      Status: item.Status,
+      RequestedDate: item.Created
+    });
+  });
+    console.log(arr, "DMS My request Data");
+  // Fetch user titles
+  // const updatedItems = await Promise.all(arr.map(async (item) => {
+  //   console.log(item, 'item');
+  //   const userTitle = await getUserTitleByEmail(item.CurrentUser);
+  //   return { ...item, CurrentUserTitle: userTitle };
+  // }));
     return arr; // Return the collected data
   }
   
@@ -314,7 +353,7 @@ export const getDataByID = async (_sp,id,ContentName) => {
   let arrs = []
   let bannerimg = []
   if(ContentName!=null&&ContentName!=undefined)
-    alert(ContentName )
+    // alert(ContentName )
   {
     await _sp.web.lists.getByTitle(ContentName).items.getById(id)
     ()

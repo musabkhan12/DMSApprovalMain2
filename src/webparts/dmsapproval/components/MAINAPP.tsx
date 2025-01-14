@@ -1,6 +1,6 @@
 import { escape, set } from "@microsoft/sp-lodash-subset";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import VerticalSideBar from "../../verticalSideBar/components/VerticalSideBar";
 
@@ -89,7 +89,7 @@ import { SPFI } from "@pnp/sp/presets/all";
 
 import { getSP } from "../loc/pnpjsConfig";
 
-import { Eye, Edit } from "react-feather";
+import { Eye, Edit, AlignRight } from "react-feather";
 
 import {
   getDataByID,
@@ -99,7 +99,8 @@ import {
 } from "../../../APISearvice/ApprovalService";
 import DMSMyApprovalAction from "./DMSApprovalAction";
 import { getApprovalListsData } from "../../../APISearvice/BusinessAppsService";
-
+import DMSMyFolderApprovalAction from "./DMSFolderApprovalAction";
+let actingforuseremail:any
 const MyApprovalContext = ({ props }: any) => {
   const sp: SPFI = getSP();
   const [activeComponent, setActiveComponent] = useState<string>("");
@@ -172,76 +173,312 @@ const MyApprovalContext = ({ props }: any) => {
     setActiveComponent(Name); // Reset to show the main component
     console.log(activeComponent, "activeComponent updated");
   };
-  const getApprovalmasterTasklist = async () => {
+  // const getApprovalmasterTasklist = async () => {
+  //   try {
+  //     const items = await sp.web.lists
+  //       .getByTitle("DMSFileApprovalTaskList")
+  //       .items.select(
+  //         "Log",
+  //         "CurrentUser",
+  //         "Remark",
+  //         "LogHistory",
+  //         "FileUID/FileUID",
+  //         "FileUID/SiteName",
+  //         "FileUID/DocumentLibraryName",
+  //         "FileUID/FileName",
+  //         "FileUID/RequestNo",
+  //         // , "FileUID/FilePreviewUrl"
+  //         "FileUID/Status",
+  //         "FileUID/FolderPath",
+  //         "FileUID/RequestedBy",
+  //         "FileUID/Created",
+  //         "FileUID/ApproveAction",
+  //         "MasterApproval/ApprovalType",
+  //         "MasterApproval/Level",
+  //         "MasterApproval/DocumentLibraryName"
+  //       )
+  //       .expand("FileUID", "MasterApproval")
+  //       .filter(`CurrentUser eq '${currentUserEmailRef.current}'`)();
+  //     console.log(items, "DMSFileApprovalTaskList");
+  //     setMylistdata(items);
+  //   } catch (error) {
+  //     console.error("Error fetching list items:", error);
+  //   }
+  // };
+  // const MyDMSAPPROVALDATASTATUS = async (sp: any, value: any) => {
+  //   try {
+  //     const items = await sp.web.lists
+  //       .getByTitle("DMSFileApprovalTaskList")
+  //       .items.select(
+  //         "Log",
+  //         "CurrentUser",
+  //         "Remark",
+  //         "LogHistory",
+  //         "FileUID/FileUID",
+  //         "FileUID/SiteName",
+  //         "FileUID/DocumentLibraryName",
+  //         "FileUID/FileName",
+  //         "FileUID/RequestNo",
+  //         // , "FileUID/FilePreviewUrl"
+  //         "FileUID/Status",
+  //         "FileUID/FolderPath",
+  //         "FileUID/RequestedBy",
+  //         "FileUID/Created",
+  //         "FileUID/ApproveAction",
+  //         "MasterApproval/ApprovalType",
+  //         "MasterApproval/Level",
+  //         "MasterApproval/DocumentLibraryName"
+  //       )
+  //       .expand("FileUID", "MasterApproval")
+  //       .filter(`CurrentUser eq '${currentUserEmailRef.current}' and FileUID/Status eq '${value}'`)();
+  //     console.log(items, "DMSFileApprovalTaskList");
+  //     setMylistdata(items);
+  //   } catch (error) {
+  //     console.error("Error fetching list items:", error);
+  //   }
+  // };
+  const getUserTitleByEmail = async (userEmail: any) => {
     try {
-      const items = await sp.web.lists
-        .getByTitle("DMSFileApprovalTaskList")
-        .items.select(
-          "Log",
-          "CurrentUser",
-          "Remark",
-          "LogHistory",
-          "FileUID/FileUID",
-          "FileUID/SiteName",
-          "FileUID/DocumentLibraryName",
-          "FileUID/FileName",
-          "FileUID/RequestNo",
-          // , "FileUID/FilePreviewUrl"
-          "FileUID/Status",
-          "FileUID/FolderPath",
-          "FileUID/RequestedBy",
-          "FileUID/Created",
-          "FileUID/ApproveAction",
-          "MasterApproval/ApprovalType",
-          "MasterApproval/Level",
-          "MasterApproval/DocumentLibraryName"
+      const user = await sp.web.siteUsers.getByEmail(userEmail)();
+      return user.Title;
+    } catch (error) {
+      console.error("Error fetching user title:", error);
+      return null;
+    }
+  };
+  const [loading, setLoading] = useState(true);
+  const [actingForUser, setSetActingForUser] = useState([]);
+
+  const myActingfordata = async () => {
+    try {
+      const currentUserEmail = currentUserEmailRef.current;
+      console.log("currentUserEmail myActingfordata", currentUserEmail);
+      const today = new Date().toISOString();
+      const delegateListItems = await sp.web.lists.getByTitle('ARGDelegateList').items.select(
+        "DelegateName/EMail",
+        "ActingFor/EMail",
+        "ActingFor/Title",
+        "DelegateName/Title",
+        "StartDate",
+        "EndDate",
+        "Status"
+      )
+      .expand("DelegateName", "ActingFor")
+      .filter(`ActingFor/EMail eq '${currentUserEmail}' and Status eq 'Active' and StartDate le '${today}' and EndDate ge '${today}'`)();
+
+      console.log("delegateListItems myActingfordata", delegateListItems);
+
+ // Extract unique ActingFor.Title and EMail values
+const uniqueTitlesAndEmails = [
+  ...new Map(
+    delegateListItems.map((item) => [item.DelegateName?.Title, { title: item.DelegateName?.Title, email: item.DelegateName?.EMail }])
+  ).values(),
+];
+
+// Set state with unique titles and emails
+setSetActingForUser(uniqueTitlesAndEmails.map((item, index) => ({ id: index.toString(), name: item.title, email: item.email })));
+console.log("setSetActingForUser", actingForUser);
+console.log("uniqueTitlesAndEmails", uniqueTitlesAndEmails);
+
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+const getApprovalmasterTasklist = async (value: any , actingfor:any) => {
+
+    // alert(`Status value is ${value} in DMS`)
+    try {
+      // Retrieve current user email
+const currentUserEmail = currentUserEmailRef.current;
+
+// Fetch the ARGDelegateList items where the current user is in the ActingFor column
+const today = new Date().toISOString(); // Get today's date in YYYY-MM-DD format
+// console.log("today", today);
+
+// const delegateListItems = await sp.web.lists.getByTitle('ARGDelegateList').items.select(
+//   "DelegateName/EMail",
+//   "ActingFor/EMail",
+//   "ActingFor/Title",
+//   "StartDate",
+//   "EndDate",
+//   "Status"
+// )
+// .expand("DelegateName", "ActingFor")
+// .filter(`ActingFor/EMail eq '${currentUserEmail}' and Status eq 'Active' and StartDate le '${today}' and EndDate ge '${today}'`)();
+
+// console.log("delegateListItems", delegateListItems);
+
+// const additionalFilters = delegateListItems.map((item:any) => `CurrentUser eq '${item.DelegateName.EMail}'`).join(' or ');
+// const combinedFilters = `CurrentUser eq '${currentUserEmail}'${additionalFilters ? ` or (${additionalFilters})` : ''} and FileUID/Status eq '${value}'`;
+
+// // Fetch items from DMSFileApprovalTaskList based on the combined filters
+// const items2 = await sp.web.lists.getByTitle('DMSFileApprovalTaskList').items.select(
+//   "Log", "CurrentUser", "Remark", "LogHistory", "FileUID/FileUID",
+//   "FileUID/SiteName", "FileUID/DocumentLibraryName", "FileUID/FileName",
+//   "FileUID/RequestNo", "FileUID/Processname", "FileUID/Status",
+//   "FileUID/FolderPath", "FileUID/RequestedBy", "FileUID/Created",
+//   "FileUID/ApproveAction", "MasterApproval/ApprovalType", "MasterApproval/Level",
+//   "MasterApproval/DocumentLibraryName"
+// )
+// .expand("FileUID", "MasterApproval")
+// .filter(combinedFilters)
+// .orderBy("Created", false)
+// .getAll();
+
+// console.log(items2, "DMSFileApprovalTaskList");
+
+
+
+      let arr = [];
+      if(actingfor === ""){
+        const items = await sp.web.lists.getByTitle('DMSFileApprovalTaskList').items.select(
+          "Log", "CurrentUser", "Remark"
+          , "LogHistory"
+          , "FileUID/FileUID"
+          , "FileUID/SiteName"
+          , "FileUID/DocumentLibraryName"
+          , "FileUID/FileName"
+          , "FileUID/RequestNo"
+          , "FileUID/Processname"
+          //  ,"FileUID/FilePreviewUrl" 
+          , "FileUID/Status"
+          , "FileUID/FolderPath"
+          , "FileUID/RequestedBy"
+          , "FileUID/Created"
+          , "FileUID/ApproveAction"
+          , "MasterApproval/ApprovalType"
+          , "MasterApproval/Level"
+          , "MasterApproval/DocumentLibraryName"
+  
         )
-        .expand("FileUID", "MasterApproval")
-        .filter(`CurrentUser eq '${currentUserEmailRef.current}'`)();
-      console.log(items, "DMSFileApprovalTaskList");
-      setMylistdata(items);
+          .expand("FileUID", "MasterApproval")
+          .filter( `(CurrentUser eq '${currentUserEmailRef.current}') and FileUID/Status eq '${value}'`).orderBy("Created", false).getAll();
+        console.log(items, "DMSFileApprovalTaskList");
+           items.map( (item) => {
+                if(item.CurrentUser !== currentUserEmailRef.current ){
+                  arr.push(item)
+                  //  alert(`Delegate user ${item.CurrentUser} is acting for ${item.FileUID.FileName}`)
+                }
+  
+            });
+        const updatedItems = await Promise.all(items.map(async (item) => {
+          const requestedbyuserTitle = await getUserTitleByEmail(item?.FileUID?.RequestedBy);
+          return { ...item, RequestedByTitle: requestedbyuserTitle };
+        }));
+        setMylistdata(updatedItems);
+      }
+      if(actingfor !== ""){
+        const items = await sp.web.lists.getByTitle('DMSFileApprovalTaskList').items.select(
+          "Log", "CurrentUser", "Remark"
+          , "LogHistory"
+          , "FileUID/FileUID"
+          , "FileUID/SiteName"
+          , "FileUID/DocumentLibraryName"
+          , "FileUID/FileName"
+          , "FileUID/RequestNo"
+          , "FileUID/Processname"
+          //  ,"FileUID/FilePreviewUrl" 
+          , "FileUID/Status"
+          , "FileUID/FolderPath"
+          , "FileUID/RequestedBy"
+          , "FileUID/Created"
+          , "FileUID/ApproveAction"
+          , "MasterApproval/ApprovalType"
+          , "MasterApproval/Level"
+          , "MasterApproval/DocumentLibraryName"
+  
+        )
+          .expand("FileUID", "MasterApproval")
+          .filter( `(CurrentUser eq '${actingfor}') and FileUID/Status eq '${value}'`).orderBy("Created", false).getAll();
+        console.log(items, "DMSFileApprovalTaskList");
+           items.map( (item) => {
+                if(item.CurrentUser !== currentUserEmailRef.current ){
+                  arr.push(item)
+                  //  alert(`Delegate user ${item.CurrentUser} is acting for ${item.FileUID.FileName}`)
+                }
+  
+            });
+        const updatedItems = await Promise.all(items.map(async (item) => {
+          const requestedbyuserTitle = await getUserTitleByEmail(item?.FileUID?.RequestedBy);
+          return { ...item, RequestedByTitle: requestedbyuserTitle };
+        }));
+        setMylistdata(updatedItems);
+      }
+
+      // const updatedItems2 = await Promise.all(items2.map(async (item) => {
+      //   const requestedbyuserTitle = await getUserTitleByEmail(item?.FileUID?.RequestedBy);
+      //   return { ...item, RequestedByTitle: requestedbyuserTitle };
+      // }));
+      // const Item2 :any = await sp.web.lists.getByTitle('DMSFolderDeligationApprovalTask').items.select(
+      //   "*",
+      //   "Folderdetail"	            
+      //   ,"Folderdetail/SiteTitle"	       
+      //   ,"Folderdetail/DocumentLibraryName"	
+      //   ,"Folderdetail/CurrentUser"
+      //   ,"Folderdetail/FolderPath"
+      //   ,"Folderdetail/FolderName"
+      //   ,"Folderdetail/ParentFolderId"
+      //   ,"Folderdetail/Department"	
+      //   ,"Folderdetail/Devision"	
+      //   ,"Folderdetail/RequestNo"	
+      //   ,"FolderMeta"	
+      //   ,"FolderMeta/SiteName"	
+      //   ,"FolderMeta/DocumentLibraryName"	
+      //   ,"FolderMeta/ColumnName",
+      //   "Folderdetail/ProcessName",
+      //   "Approver"
+      // ).expand("Folderdetail" ,"FolderMeta")
+      // .filter(`Approver eq '${currentUserEmailRef.current}'`)();
+      // console.log("Item2",Item2)
+      // const normalizeItem2 = (item:any) => ({
+      //   Log: item?.Log || '', // Replace with appropriate mappings
+      //   CurrentUser: item?.Folderdetail?.CurrentUser || '',
+      //   Remark: item?.Remark || '',
+      //   LogHistory: item?.LogHistory || '',
+      //   ProcessName:  item?.Folderdetail?.ProcessName,
+      //   FileUID: {
+      //     FileUID: item?.FolderMeta?.FileUID || item?.Folderdetail?.RequestNo,
+      //     SiteName: item?.FolderMeta?.SiteName || '',
+      //     DocumentLibraryName: item?.FolderMeta?.DocumentLibraryName || '',
+      //     FileName: item?.FolderMeta?.FolderName || '',
+      //     RequestNo: item?.Folderdetail?.RequestNo || '',
+      //     Status: item?.Status || '',
+      //     FolderPath: item?.Folderdetail?.FolderPath || '',
+      //     RequestedBy: item?.RequestedBy || item?.Folderdetail?.CurrentUser || '',
+      //     Created: item?.Created || '',
+      //     ApproveAction: item?.ApproveAction || ''
+      //   },
+      //   MasterApproval: {
+      //     ApprovalType: item?.ApprovalType || '',
+      //     Level: item?.Level || '',
+      //     DocumentLibraryName: item?.DocumentLibraryName || ''
+      //   }
+      // });
+      // const normalizeItem3 = Item2.map(normalizeItem2);
+      //  const CombinedItems  = [...items, ...normalizeItem3];
+      //  console.log(CombinedItems , "CombinedItems")
+      // setMylistdata(CombinedItems);
+      // setMylistdata(updatedItems);
+      
+
+      // return arr = CombinedItems
+
     } catch (error) {
       console.error("Error fetching list items:", error);
     }
   };
-  const MyDMSAPPROVALDATASTATUS = async (sp: any, value: any) => {
-    try {
-      const items = await sp.web.lists
-        .getByTitle("DMSFileApprovalTaskList")
-        .items.select(
-          "Log",
-          "CurrentUser",
-          "Remark",
-          "LogHistory",
-          "FileUID/FileUID",
-          "FileUID/SiteName",
-          "FileUID/DocumentLibraryName",
-          "FileUID/FileName",
-          "FileUID/RequestNo",
-          // , "FileUID/FilePreviewUrl"
-          "FileUID/Status",
-          "FileUID/FolderPath",
-          "FileUID/RequestedBy",
-          "FileUID/Created",
-          "FileUID/ApproveAction",
-          "MasterApproval/ApprovalType",
-          "MasterApproval/Level",
-          "MasterApproval/DocumentLibraryName"
-        )
-        .expand("FileUID", "MasterApproval")
-        .filter(`CurrentUser eq '${currentUserEmailRef.current}' and FileUID/Status eq '${value}'`)();
-      console.log(items, "DMSFileApprovalTaskList");
-      setMylistdata(items);
-    } catch (error) {
-      console.error("Error fetching list items:", error);
-    }
-  };
+
   console.log(Mylistdata, "Mylistdata");
   const currentUserEmailRef = useRef("");
   const getCurrrentuser = async () => {
     const userdata = await sp.web.currentUser();
     currentUserEmailRef.current = userdata.Email;
-    //getApprovalmasterTasklist();
+    getApprovalmasterTasklist('Pending' , '');
+    myActingfordata()
   };
   React.useEffect(() => {
     getCurrrentuser();
@@ -258,15 +495,24 @@ const MyApprovalContext = ({ props }: any) => {
   const getTaskItemsbyID = async (e: any, itemid: any) => {
     // currentItemID = itemid
     currentItemID = itemid;
-    // setActiveComponent("Approval Action");
+    setActiveComponent("Approval Action");
     console.log("itemid", itemid);
-    const items = await sp.web.lists
-      .getByTitle("DMSFileApprovalTaskList")
-      .items.select("CurrentUser", "FileUID/FileUID", "Log")
-      .expand("FileUID")
-      .filter(`FileUID/RequestNo eq '${itemid}'`)();
-    console.log(items, "items");
+    // const items = await sp.web.lists
+    //   .getByTitle("DMSFileApprovalTaskList")
+    //   .items.select("CurrentUser", "FileUID/FileUID", "Log")
+    //   .expand("FileUID")
+    //   .filter(`FileUID/RequestNo eq '${itemid}'`)();
+    // console.log(items, "items");
   };
+  const getTaskItemsbyID2 = async (e: any, itemid: any) => {
+    // alert("Folder")
+    // currentItemID = itemid
+    currentItemID = itemid
+    setActiveComponent('DMS Folder Approval')
+    console.log("itemid", itemid)
+    // const items = await sp.web.lists.getByTitle('DMSFileApprovalTaskList').items.select("CurrentUser" , "FileUID/FileUID" , "Log").expand("FileUID").filter(`FileUID/RequestNo eq '${itemid}'`)();
+    //    console.log(items , "items")
+  }
   const toggleDropdown = () => {
     setIsOpen(!isOpen);
   };
@@ -373,6 +619,7 @@ const MyApprovalContext = ({ props }: any) => {
 
   const ApiCall = async (status: string) => {
     // if(activeTab == "Intranet"){
+ 
     let MyApprovaldata = await getMyApproval(sp, status);
     let Automationdata = await getApprovalListsData(sp, status);
     let typedata = await getType(sp);
@@ -392,19 +639,30 @@ const MyApprovalContext = ({ props }: any) => {
   //   setAnnouncementData(await getDiscussionFilterAll(sp, optionFilter));
 
   // };
-  const handleStatusChange = async (name: string, value: string) => {
+  const handleStatusChange = async (name: string, value: string , actingfor:any) => {
+    actingforuseremail = actingfor
+    // alert(`Status value is ${value} is acting for ${actingfor}`)
+     if (actingforuseremail === undefined || actingforuseremail === null || actingforuseremail === "") {
+      // alert("acting for is undefined")
+      }
+
     if (value === "") {
       // Show all records if no type is selected
       console.log("No status selected");
     } else {
       // Filter records based on the selected type
-      let MyApprovaldata = await getMyApproval(sp, value);
-      let Automationdata = await getApprovalListsData(sp, value);
-      let MyDMSAPPROVALDATA:any = await MyDMSAPPROVALDATASTATUS(sp, value)
+      let MyApprovaldata = await getMyApproval(sp, value , actingfor);
+      let Automationdata = await getApprovalListsData(sp, value , actingfor);
+      // let MyDMSAPPROVALDATA:any = await MyDMSAPPROVALDATASTATUS(sp, value)
+      let MyDMSAPPROVALDATA: any = await getApprovalmasterTasklist(value , actingfor)
+      console.log("MyDMSAPPROVALDATA", MyDMSAPPROVALDATA)
       setMyApprovalsDataAll(MyApprovaldata);
       setMyApprovalsDataAutomation(Automationdata);
       if (activeTab == "Intranet") {
         setMyApprovalsData(MyApprovaldata);
+      } else if (activeTab == "DMS") {
+        // alert(value)
+        setMyApprovalsData(MyDMSAPPROVALDATA);
       } else if (activeTab == "Automation") {
         setMyApprovalsData(Automationdata);
         console.log("Automationdata", Automationdata);
@@ -446,7 +704,7 @@ const MyApprovalContext = ({ props }: any) => {
       filters.RequestID
     );
 
-    const filteredData = data.filter((item, index) => {
+    const filteredData = data?.filter((item, index) => {
       return (
         (filters.SNo === "" || String(index + 1).includes(filters.SNo)) &&
         (filters.Title === "" ||
@@ -483,7 +741,7 @@ const MyApprovalContext = ({ props }: any) => {
       );
     });
 
-    const sortedData = filteredData.sort((a, b) => {
+    const sortedData = filteredData?.sort((a, b) => {
       if (sortConfig.key === "SNo") {
         // Sort by index
 
@@ -535,28 +793,46 @@ const MyApprovalContext = ({ props }: any) => {
   const filteredNewsData = applyFiltersAndSorting(newsData);
 
   const [currentPage, setCurrentPage] = React.useState(1);
-
+  const [currentGroup, setCurrentGroup] = React.useState(1);
   const itemsPerPage = 10;
-
-  const totalPages = Math.ceil(filteredMyApprovalData.length / itemsPerPage);
-
+  const pagesPerGroup = 10;
+  const totalPages = Math.ceil(filteredMyApprovalData?.length / itemsPerPage);
+  const totalGroups = Math.ceil(totalPages / pagesPerGroup);
   const [ContentData, setContentData] = React.useState<any>([]);
 
   const [currentItem, setCurrentItem] = React.useState<any>([]);
 
-  const handlePageChange = (pageNumber: any) => {
-    if (pageNumber > 0 && pageNumber <= totalPages) {
-      setCurrentPage(pageNumber);
+  // const handlePageChange = (pageNumber: any) => {
+  //   if (pageNumber > 0 && pageNumber <= totalPages) {
+  //     setCurrentPage(pageNumber);
+  //   }
+  // };
+  const handleGroupChange = (direction: "next" | "prev") => {
+    const newGroup = currentGroup + (direction === "next" ? 1 : -1);
+    if (newGroup > 0 && newGroup <= totalGroups) {
+      setCurrentGroup(newGroup);
+      setCurrentPage((newGroup - 1) * pagesPerGroup + 1); // Go to the first page of the new group
     }
   };
 
+  const handlePageChange = (pageNumber: any) => {
+
+    if (pageNumber > 0 && pageNumber <= totalPages) {
+
+      setCurrentPage(pageNumber);
+      const newGroup = Math.ceil(pageNumber / pagesPerGroup);
+      setCurrentGroup(newGroup);
+    }
+
+  };
   const startIndex = (currentPage - 1) * itemsPerPage;
 
   const endIndex = startIndex + itemsPerPage;
 
-  const currentData = filteredMyApprovalData.slice(startIndex, endIndex);
-
-  const newsCurrentData = filteredNewsData.slice(startIndex, endIndex);
+  const currentData = filteredMyApprovalData?.slice(startIndex, endIndex);
+  const startPage = (currentGroup - 1) * pagesPerGroup + 1;
+  const endPage = Math.min(currentGroup * pagesPerGroup, totalPages);
+  const newsCurrentData = filteredNewsData?.slice(startIndex, endIndex);
 
   const [editID, setEditID] = React.useState(null);
 
@@ -710,7 +986,7 @@ const MyApprovalContext = ({ props }: any) => {
               `${siteUrl}/SitePages/AddAnnouncement.aspx` +
               "?requestid=" +
               Item?.Id +
-              "&mode=" + mode;
+            "&mode=" + mode + "&page=MyApproval";
             break;
           case "News":
             sessionkey = "announcementId";
@@ -718,7 +994,7 @@ const MyApprovalContext = ({ props }: any) => {
               `${siteUrl}/SitePages/AddAnnouncement.aspx` +
               "?requestid=" +
               Item?.Id +
-              "&mode=" + mode;
+            "&mode=" + mode + "&page=MyApproval";
             break;
           case "Event":
             sessionkey = "EventId";
@@ -726,7 +1002,7 @@ const MyApprovalContext = ({ props }: any) => {
               `${siteUrl}/SitePages/EventMasterForm.aspx` +
               "?requestid=" +
               Item?.Id +
-              "&mode=" + mode;
+            "&mode=" + mode + "&page=MyApproval";
             break;
           case "Media":
             sessionkey = "mediaId";
@@ -734,16 +1010,13 @@ const MyApprovalContext = ({ props }: any) => {
               `${siteUrl}/SitePages/MediaGalleryForm.aspx` +
               "?requestid=" +
               Item?.Id +
-              "&mode=" + mode;
+            "&mode=" + mode + "&page=MyApproval";
             break;
-            case "Blog":
-              sessionkey = "blogId";
-              redirecturl =
-                `${siteUrl}/SitePages/Blogs.aspx` +
-                "?requestid=" +
-                Item?.Id +
-                "&mode=" + mode;
-              break;
+          case "Blog":
+            sessionkey = "blogId";
+            redirecturl =
+              `${siteUrl}/SitePages/BlogDetails.aspx?` + Item?.ContentId + "&page=MyApproval";
+            break;
           default:
         }
 
@@ -825,7 +1098,7 @@ const MyApprovalContext = ({ props }: any) => {
                       id="Type"
                       name="Type"
                       onChange={(e) =>
-                        handleStatusChange(e.target.name, e.target.value)
+                        handleStatusChange(e.target.name,  e.target.value , actingforuseremail)
                       }
                       className="form-select"
                     >
@@ -838,6 +1111,34 @@ const MyApprovalContext = ({ props }: any) => {
                     </select>
                   </div>
                 </div>
+                <div className="row">
+                  <div style={{ textAlign: "right" }} className="col-md-4 newtexleft">
+                    <div className="mb-0">
+                      <label htmlFor="Status" className="form-label mt-2">
+                        Filter By Acting For
+                      </label>
+                    </div>
+                  </div>
+                  <div className="col-md-8">
+                    <select
+        id="Type"
+        name="Type"
+        onChange={(e) => handleStatusChange(e.target.name, 'Pending' , e.target.value)}
+        className="form-select"
+        disabled={loading || actingForUser.length === 0}
+      >
+        <option value="">
+          {loading ? "Loading..." : actingForUser.length === 0 ? "No Deligation" : "Remove Filter"}
+        </option>
+        {actingForUser.map((item, index) => (
+          <option key={index} value={item.email}>
+            {item.name}
+          </option>
+        ))}
+      </select>
+                  </div>
+                </div>
+
               </div>
             </div>
 
@@ -915,7 +1216,9 @@ const MyApprovalContext = ({ props }: any) => {
                           <div className="table-responsive pt-0">
                             {activeTab === "Intranet" ||
                               activeTab === "Automation" ? (
-                              <table
+                               
+                                <>
+                                                            <table
                                 className="mtbalenew mt-0 table-centered table-nowrap table-borderless mb-0"
                                 style={{ position: "relative" }}
                               >
@@ -1239,7 +1542,7 @@ const MyApprovalContext = ({ props }: any) => {
                                   isActivedata
                                 )}
                                 <tbody>
-                                  {currentData.length === 0 ? (
+                                  {currentData?.length === 0 ? (
                                     <div
 
                                       className="no-results card card-body align-items-center  annusvg text-center "
@@ -1262,11 +1565,11 @@ const MyApprovalContext = ({ props }: any) => {
 
                                     </div>
                                   ) : (
-                                    currentData.map(
+                                    currentData?.map(
                                       (item: any, index: number) => (
                                         <tr
                                           key={index}
-                                          style={{ cursor: "pointer" }}
+                                         
                                         >
                                           <td
                                             style={{
@@ -1320,7 +1623,7 @@ const MyApprovalContext = ({ props }: any) => {
                                               minWidth: "100px",
                                               maxWidth: "100px",
                                             }}
-                                            title= {activeTab == "Automation"
+                                            title={activeTab == "Automation"
                                               ? item?.Author?.Title
                                               : item?.Requester?.Title}
                                           >
@@ -1333,10 +1636,10 @@ const MyApprovalContext = ({ props }: any) => {
                                             style={{
                                               minWidth: "80px",
                                               maxWidth: "80px",
-                                              textAlign:'center'
+                                              textAlign: 'center'
                                             }}
                                           >
-                                            <div className="btn btn-light">
+                                            <div className="btn btn-light1">
                                               {new Date(
                                                 item?.Created
                                               ).toLocaleDateString()}
@@ -1347,7 +1650,7 @@ const MyApprovalContext = ({ props }: any) => {
                                             style={{
                                               minWidth: "80px",
                                               maxWidth: "80px",
-                                               textAlign:'center'
+                                              textAlign: 'center'
                                             }}
                                           >
                                             <div className="btn btn-status">
@@ -1359,6 +1662,7 @@ const MyApprovalContext = ({ props }: any) => {
                                             style={{
                                               minWidth: "50px",
                                               maxWidth: "50px",
+                                              textAlign:'center'
                                             }}
                                             className="fe-eye font-18"
                                           >
@@ -1375,7 +1679,7 @@ const MyApprovalContext = ({ props }: any) => {
 
                                                   maxWidth: "20px",
 
-                                                  marginLeft: "15px",
+                                                  
 
                                                   cursor: "pointer",
 
@@ -1392,7 +1696,7 @@ const MyApprovalContext = ({ props }: any) => {
 
                                                   maxWidth: "20px",
 
-                                                  marginLeft: "15px",
+                                                  marginLeft: "0px",
 
                                                   cursor: "pointer",
                                                 }}
@@ -1405,6 +1709,105 @@ const MyApprovalContext = ({ props }: any) => {
                                   )}
                                 </tbody>
                               </table>
+
+{currentData?.length > 0 ? (
+  <nav className="pagination-container">
+    <ul className="pagination">
+      {/* <li
+        className={`page-item ${currentPage === 1 ? "disabled" : ""
+          }`}
+      > */}
+      <li
+
+        className={`prevPage page-item ${currentGroup === 1 ? "disabled" : ""
+          }`}
+        onClick={() => handleGroupChange("prev")}
+      >
+
+        <a
+          className="page-link"
+          // onClick={() =>
+          //   handlePageChange(currentPage - 1)
+          // }
+          aria-label="Previous"
+        >
+          «
+        </a>
+      </li>
+      {Array.from(
+
+        { length: endPage - startPage + 1 },
+
+        (_, num) => {
+          const pageNum = startPage + num;
+          return (
+
+            <li
+
+              key={pageNum}
+
+              className={`page-item ${currentPage === pageNum ? "active" : ""
+
+                }`}
+
+            >
+
+              <a
+
+                className="page-link"
+
+                onClick={() =>
+
+                  handlePageChange(pageNum)
+
+                }
+
+              >
+
+                {pageNum}
+
+              </a>
+
+            </li>
+
+          )
+        }
+
+      )}
+
+      <li
+
+        className={`nextPage page-item ${currentGroup === totalGroups ? "disabled" : ""
+
+          }`}
+        onClick={() => handleGroupChange("next")}
+      >
+
+        <a
+
+          className="page-link"
+
+          onClick={() =>
+
+            handlePageChange(currentPage + 1)
+
+          }
+
+          aria-label="Next"
+
+        >
+
+          »
+
+        </a>
+
+      </li>
+      
+    </ul>
+  </nav>
+) : (
+  <></>
+)} </>
                             ) : null}
 
                             {activeTab === "DMS" && (
@@ -1414,6 +1817,7 @@ const MyApprovalContext = ({ props }: any) => {
                                     <table
                                       className="mtbalenew mt-0 table-centered table-nowrap table-borderless mb-0"
                                       style={{ position: "relative" }}
+                                      
                                     >
                                       <thead>
                                         <tr>
@@ -1431,7 +1835,7 @@ const MyApprovalContext = ({ props }: any) => {
                                             <div
                                               className="d-flex pb-2"
                                               style={{
-                                                justifyContent: "space-between",
+                                                justifyContent: "space-evenly",
                                               }}
                                             >
                                               <span>S.No.</span>
@@ -1454,7 +1858,7 @@ const MyApprovalContext = ({ props }: any) => {
                                                 }
                                                 onKeyDown={(e) => {
                                                   if (e.key === 'Enter' && !e.shiftKey) {
-                                                    e.preventDefault(); // Prevents the new line in textarea
+                                                    e.preventDefault();
                                                   }
                                                 }}
                                                 className="inputcss"
@@ -1473,7 +1877,7 @@ const MyApprovalContext = ({ props }: any) => {
                                               <div
                                                 className="d-flex pb-2"
                                                 style={{
-                                                  justifyContent: "space-between",
+                                                  justifyContent: "space-evenly",
                                                 }}
                                               >
                                                 <span>Request ID</span>
@@ -1501,7 +1905,54 @@ const MyApprovalContext = ({ props }: any) => {
                                                   }
                                                   onKeyDown={(e) => {
                                                     if (e.key === 'Enter' && !e.shiftKey) {
-                                                      e.preventDefault(); // Prevents the new line in textarea
+                                                      e.preventDefault();
+                                                    }
+                                                  }}
+                                                  className="inputcss"
+                                                  style={{ width: "100%" }}
+                                                />
+                                              </div>
+                                            </div>
+                                          </th>
+                                          <th
+                                            style={{
+                                              minWidth: "80px",
+                                              maxWidth: "80px",
+                                            }}
+                                          >
+                                            <div className="d-flex flex-column bd-highlight ">
+                                              <div
+                                                className="d-flex pb-2"
+                                                style={{
+                                                  justifyContent: "space-evenly",
+                                                }}
+                                              >
+                                                <span>Title</span>
+
+                                                <span
+                                                  onClick={() =>
+                                                    handleSortChange("Title")
+                                                  }
+                                                >
+                                                  <FontAwesomeIcon
+                                                    icon={faSort}
+                                                  />
+                                                </span>
+                                              </div>
+
+                                              <div className=" bd-highlight">
+                                                <input
+                                                  type="text"
+                                                  placeholder="Filter by Title"
+                                                  onChange={(e) =>
+                                                    handleFilterChange(
+                                                      e,
+                                                      "RequestID"
+                                                    )
+                                                  }
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                      e.preventDefault();
                                                     }
                                                   }}
                                                   className="inputcss"
@@ -1521,7 +1972,7 @@ const MyApprovalContext = ({ props }: any) => {
                                               <div
                                                 className="d-flex  pb-2"
                                                 style={{
-                                                  justifyContent: "space-between",
+                                                  justifyContent: "space-evenly",
                                                 }}
                                               >
                                                 <span>Process Name</span>{" "}
@@ -1550,7 +2001,7 @@ const MyApprovalContext = ({ props }: any) => {
                                                   }
                                                   onKeyDown={(e) => {
                                                     if (e.key === 'Enter' && !e.shiftKey) {
-                                                      e.preventDefault(); // Prevents the new line in textarea
+                                                      e.preventDefault();
                                                     }
                                                   }}
                                                   className="inputcss"
@@ -1570,7 +2021,7 @@ const MyApprovalContext = ({ props }: any) => {
                                               <div
                                                 className="d-flex  pb-2"
                                                 style={{
-                                                  justifyContent: "space-between",
+                                                  justifyContent: "space-evenly",
                                                 }}
                                               >
                                                 <span>Requested By</span>{" "}
@@ -1599,7 +2050,7 @@ const MyApprovalContext = ({ props }: any) => {
                                                   }
                                                   onKeyDown={(e) => {
                                                     if (e.key === 'Enter' && !e.shiftKey) {
-                                                      e.preventDefault(); // Prevents the new line in textarea
+                                                      e.preventDefault();
                                                     }
                                                   }}
                                                   className="inputcss"
@@ -1619,7 +2070,7 @@ const MyApprovalContext = ({ props }: any) => {
                                               <div
                                                 className="d-flex  pb-2"
                                                 style={{
-                                                  justifyContent: "space-between",
+                                                  justifyContent: "space-evenly",
                                                 }}
                                               >
                                                 <span>Requested Date</span>{" "}
@@ -1648,7 +2099,7 @@ const MyApprovalContext = ({ props }: any) => {
                                                   }
                                                   onKeyDown={(e) => {
                                                     if (e.key === 'Enter' && !e.shiftKey) {
-                                                      e.preventDefault(); // Prevents the new line in textarea
+                                                      e.preventDefault();
                                                     }
                                                   }}
                                                   className="inputcss"
@@ -1668,7 +2119,7 @@ const MyApprovalContext = ({ props }: any) => {
                                               <div
                                                 className="d-flex  pb-2"
                                                 style={{
-                                                  justifyContent: "space-between",
+                                                  justifyContent: "space-evenly",
                                                 }}
                                               >
                                                 <span>Status</span>{" "}
@@ -1695,7 +2146,7 @@ const MyApprovalContext = ({ props }: any) => {
                                                   }
                                                   onKeyDown={(e) => {
                                                     if (e.key === 'Enter' && !e.shiftKey) {
-                                                      e.preventDefault(); // Prevents the new line in textarea
+                                                      e.preventDefault();
                                                     }
                                                   }}
                                                   className="inputcss"
@@ -1739,7 +2190,7 @@ const MyApprovalContext = ({ props }: any) => {
                                         isActivedata
                                       )}
                                       <tbody>
-                                        {currentData.length === 0 ? (
+                                        {currentData?.length === 0 ? (
                                           <div
 
                                             className="no-results card card-body align-items-center  annusvg text-center "
@@ -1756,22 +2207,25 @@ const MyApprovalContext = ({ props }: any) => {
                                             }}
 
                                           >
-                                            <svg style={{top:'50%'}} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                                            <svg style={{ top: '50%' }} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
 
                                             <p className="font-14 text-muted text-center">No Approval found </p>
 
                                           </div>
                                         ) : (
-                                          currentData.map(
+                                          currentData?.map(
                                             (item: any, index: number) => (
                                               <tr
                                                 key={index}
-                                                style={{ cursor: "pointer" }}
+                                               
                                               >
                                                 <td
                                                   style={{
                                                     minWidth: "40px",
                                                     maxWidth: "40px",
+                                             
+                                                      backgroundColor: item?.CurrentUser !== currentUserEmailRef.current ? "green" : "transparent",
+                                                  
                                                   }}
                                                 >
                                                   <div
@@ -1780,6 +2234,7 @@ const MyApprovalContext = ({ props }: any) => {
                                                   >
                                                     {" "}
                                                     {startIndex + index + 1}
+                                          
                                                   </div>{" "}
                                                 </td>
 
@@ -1791,28 +2246,29 @@ const MyApprovalContext = ({ props }: any) => {
 
                                                     textTransform: "capitalize",
                                                   }}
-                                                  title= {item?.FileUID.FileUID}
+                                                  title={item?.FileUID?.RequestNo}
                                                 >
-                                                  {item?.FileUID.FileUID}
+                                                  {item?.FileUID?.RequestNo}
                                                 </td>
-                                                {/* {activeTab == "Intranet" && 
-        <td
+                                                <td
+                                                  style={{
+                                                    minWidth: "80px",
 
-          style={{ minWidth: "120px", maxWidth: "120px" }}
+                                                    maxWidth: "80px",
 
-        >
-
-          {item.Title}
-
-        </td>
-        } */}
+                                             
+                                                  }}
+                                                  title={item?.FileUID?.FileName}
+                                                >
+                                                  {item?.FileUID?.FileName}
+                                                </td>
                                                 <td
                                                   style={{
                                                     minWidth: "120px",
                                                     maxWidth: "120px",
                                                   }}
                                                 >
-                                                  DMS
+                                                  {item?.FileUID?.Processname}
                                                 </td>
 
                                                 <td
@@ -1821,21 +2277,28 @@ const MyApprovalContext = ({ props }: any) => {
                                                     maxWidth: "100px",
                                                   }}
                                                 >
-                                                  {item?.FileUID.RequestedBy}
+                                                  {item?.RequestedByTitle}
                                                 </td>
 
                                                 <td
                                                   style={{
-                                                    minWidth: "100px",
-                                                    maxWidth: "100px",
-                                                    textAlign:'center'
+                                                    minWidth: "80px",  maxWidth: "80px",
+                                                    // maxWidth: "100px",
+                                                    textAlign: 'center'
                                                   }}
                                                 >
-                                                  <div className="btn btn-light">
-                                                    {/* {new Date(
-                                                    item?.Created
-                                                  ).toLocaleDateString()} */}
-                                                    {item?.FileUID.Created}
+                                                  <div className="btn btn-light1">
+
+                                                    {/* {item?.FileUID?.Created} */}
+                                                    {new Date(item?.FileUID?.Created).toLocaleString('en-US', { 
+month: '2-digit',
+day: '2-digit',
+year: 'numeric',
+// hour: '2-digit',
+// minute: '2-digit',
+// second: '2-digit',
+// hour12: true 
+})}
                                                   </div>
                                                 </td>
 
@@ -1843,10 +2306,11 @@ const MyApprovalContext = ({ props }: any) => {
                                                   style={{
                                                     minWidth: "80px",
                                                     maxWidth: "80px",
+                                                     textAlign: 'center'
                                                   }}
                                                 >
                                                   <div className="btn btn-status">
-                                                    {item?.FileUID.Status}
+                                                    {item?.FileUID?.Status}
                                                   </div>
                                                 </td>
 
@@ -1859,7 +2323,7 @@ const MyApprovalContext = ({ props }: any) => {
                                                 >
 
                                                   <Edit
-                                                    onClick={(e) => { getTaskItemsbyID(e, item.FileUID.FileUID); handleShowNestedDMSTable() }}
+                                                    onClick={(e) => { getTaskItemsbyID(e, item?.FileUID?.FileUID); handleShowNestedDMSTable() }}
                                                     style={{
                                                       minWidth: "20px",
 
@@ -1877,71 +2341,240 @@ const MyApprovalContext = ({ props }: any) => {
                                         )}
                                       </tbody>
                                     </table>
+                                    {currentData?.length > 0 ? (
+  <nav className="pagination-container">
+    <ul className="pagination">
+      {/* <li
+        className={`page-item ${currentPage === 1 ? "disabled" : ""
+          }`}
+      > */}
+      <li
+
+        className={`prevPage page-item ${currentGroup === 1 ? "disabled" : ""
+          }`}
+        onClick={() => handleGroupChange("prev")}
+      >
+
+        <a
+          className="page-link"
+          // onClick={() =>
+          //   handlePageChange(currentPage - 1)
+          // }
+          aria-label="Previous"
+        >
+          «
+        </a>
+      </li>
+      {Array.from(
+
+        { length: endPage - startPage + 1 },
+
+        (_, num) => {
+          const pageNum = startPage + num;
+          return (
+
+            <li
+
+              key={pageNum}
+
+              className={`page-item ${currentPage === pageNum ? "active" : ""
+
+                }`}
+
+            >
+
+              <a
+
+                className="page-link"
+
+                onClick={() =>
+
+                  handlePageChange(pageNum)
+
+                }
+
+              >
+
+                {pageNum}
+
+              </a>
+
+            </li>
+
+          )
+        }
+
+      )}
+
+      <li
+
+        className={`nextPage page-item ${currentGroup === totalGroups ? "disabled" : ""
+
+          }`}
+        onClick={() => handleGroupChange("next")}
+      >
+
+        <a
+
+          className="page-link"
+
+          onClick={() =>
+
+            handlePageChange(currentPage + 1)
+
+          }
+
+          aria-label="Next"
+
+        >
+
+          »
+
+        </a>
+
+      </li>
+      
+    </ul>
+  </nav>
+) : (
+  <></>
+)}
+                                   
                                   </div>
                                 ) : (
                                   <div>
-                                    <div>
-                                      <button style={{ float: 'right' }} type="button" className="btn btn-secondary" onClick={() => setShowNestedDMSTable(false)}> Back </button>
-                                      <DMSMyApprovalAction props={currentItemID} />
+                                    <DMSMyApprovalAction props={{currentItemID , actingforuseremail}} />
+                                       <div className="col-sm-12 text-center">
+                                      {/* <button style={{ float: 'right' }} type="button" className="btn btn-secondary" onClick={() => setShowNestedDMSTable(false)}> Back </button> */}
+                                      
+                                      <button type="button" className="btn btn-light newp waves-effect waves-light m-3" style={{ fontSize: '0.875rem' }} onClick={() => setShowNestedDMSTable(false)}>
+                                <img src={require('../../../Assets/ExtraImage/xIcon.svg')} style={{ width: '1rem' }}
+                                    className='me-1' alt="x" />
+                                Cancel
+                            </button>
                                     </div>
                                   </div>
                                 )}
                               </div>
                             )}
+                            {/* {activeTab === "DMS" ?
+               (
+               <div>
+                    <div className="DMSMasterContainer">
+                <h4 className="page-title fw-bold mb-1 font-20">My Approvals 1</h4>
+                <div className="" style={{ backgroundColor: 'white', border:'1px solid #54ade0', marginTop:'20px', borderRadius:'20px', padding: '15px'}}>
+                <table className="mtbalenew">
+    <thead>
+      <tr>
+        <th
+          style={{
+            minWidth: '40px',
+            maxWidth: '40px',
+         
+          }}
+        >
+          S.No
+        </th>
+        <th>Request ID</th>
+        <th>Process Name</th>
+        <th>Requested By</th>
+        <th >Requested Date</th>
+        <th style={{ minWidth: '80px', maxWidth: '80px' }}>Status</th>
+        <th
+          style={{
+            minWidth: '70px',
+            maxWidth: '70px',
+         
+          }}
+        >
+          Action
+        </th>
+      </tr>
+    </thead>
+    <tbody style={{ maxHeight: '8007px' }}>
+       
+      {Mylistdata.length > 0  ? Mylistdata.map((item, index) => {
+      return(
+        <tr>
+<td style={{ minWidth: '40px', maxWidth: '40px'}}>
+  <span style={{marginLeft:'5px'}} className="indexdesign">{index}</span>
+  </td>
+<td >{(truncateText(item.FileUID.FileUID, 22))}</td>
+<td >{item?.ProcessName}</td>
+<td >{(truncateText(item.FileUID.RequestedBy, 22))}</td> 
+<td >
+<div
+  style={{
+    padding: '5px',
+    border: '1px solid #efefef',
+    background: '#fff', fontSize:'14px',
+    borderRadius: '30px',
+  
+  }}
+  className="btn btn-light"
+>
+ {item.FileUID.Created}
+</div>
+</td>
+<td style={{ minWidth: '80px', maxWidth: '80px', textAlign:'center' }}>
+<div className="finish mb-0">Pending</div>
+</td>
+<td style={{ minWidth: '70px', maxWidth: '70px' }}>
+  {item?.ProcessName === "DMS Folder Approval" ?
+    (<a onClick={(e )=>getTaskItemsbyID2(e , item.FileUID.FileUID)}>
+    <FontAwesomeIcon icon={faEye} />
+   </a>
+   ) : item?.ProcessName === "" || item?.ProcessName === null || item?.ProcessName === undefined ?    (
+      <a onClick={(e )=>getTaskItemsbyID(e , item.FileUID.FileUID)}>
+ <FontAwesomeIcon icon={faEye} />
+</a>
+    ) : null
+  }
+
+</td>
+</tr>
+      )
+
+       })
+       :""
+
+}
+
+      
+   
+
+     
+    </tbody>
+  </table>
+        </div>
+              </div>
+               </div>
+               ) : (
+                <div>
+                  {activeComponent === 'Approval Action' ? (
+                    <div>
+                   <button style={{float:'right'}} type="button" className="btn btn-secondary" onClick={()=>handleReturnToMain('')}> Back </button>
+                  <DMSMyApprovalAction props={currentItemID}/>
+                    </div>
+               
+                  ) : activeComponent === 'DMS Folder Approval' ? (
+                    <div>
+<button style={{float:'right'}} type="button" className="btn btn-secondary" onClick={()=>handleReturnToMain('')}> Back </button>
+<DMSMyFolderApprovalAction props={currentItemID}/>
+                    </div>
+                                       
+                  ) :null
+                  
+                  } 
+             
+                </div>
+               
+            
+               )
+               } */}
                           </div>
 
-                          {currentData.length > 0 ? (
-                            <nav className="pagination-container">
-                              <ul className="pagination">
-                                <li
-                                  className={`page-item ${currentPage === 1 ? "disabled" : ""
-                                    }`}
-                                >
-                                  <a
-                                    className="page-link"
-                                    onClick={() =>
-                                      handlePageChange(currentPage - 1)
-                                    }
-                                    aria-label="Previous"
-                                  >
-                                    «
-                                  </a>
-                                </li>
-
-                                {Array.from({ length: totalPages }, (_, num) => (
-                                  <li
-                                    key={num}
-                                    className={`page-item ${currentPage === num + 1 ? "active" : ""
-                                      }`}
-                                  >
-                                    <a
-                                      className="page-link"
-                                      onClick={() => handlePageChange(num + 1)}
-                                    >
-                                      {num + 1}
-                                    </a>
-                                  </li>
-                                ))}
-
-                                <li
-                                  className={`page-item ${currentPage === totalPages ? "disabled" : ""
-                                    }`}
-                                >
-                                  <a
-                                    className="page-link"
-                                    onClick={() =>
-                                      handlePageChange(currentPage + 1)
-                                    }
-                                    aria-label="Next"
-                                  >
-                                    »
-                                  </a>
-                                </li>
-                              </ul>
-                            </nav>
-                          ) : (
-                            <></>
-                          )}
+                        
                         </div>
                       </div>
                     </div>

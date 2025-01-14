@@ -19,6 +19,7 @@
     "strict": false,
     "esModuleInterop": true,
     "allowJs": true,
+    "downlevelIteration": true,
     "typeRoots": [
       "./node_modules/@types",
       "./node_modules/@microsoft"
@@ -31,7 +32,10 @@
     "es2015",
       "dom",
       "es2015.collection",
-      "es2015.promise"
+      "es2015.promise",
+      "ES2016",
+      
+      
     ]
   },
   "include": [

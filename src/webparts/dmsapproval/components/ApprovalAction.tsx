@@ -517,6 +517,23 @@ try {
           }
       }
       else if(buttonText === "Reject"){
+        try {
+          await sp.web.lists.getByTitle("DMSFileApprovalList").items
+          .filter(`FileUID eq '${props}'`)()
+          .then(async (items) => {
+              if (items.length > 0) {
+                  const itemId = items[0].Id; // Assuming one item per FileUID
+                  alert(`${itemId} item id is 2 in reject`)
+                  await sp.web.lists.getByTitle("DMSFileApprovalList").items.getById(itemId).update({
+                      Status: "Rejected",
+                  });
+                  console.log("Updated DMSFileApprovalList with Rejected status");
+                  alert(`${itemId} Updated DMSFileApprovalList with Rejected status`)
+              }
+          });
+        } catch (error) {
+           console.log(error , "Error updating DMSFileApprovalList Rejected status");
+        }
         setFinalStatus = 'Rejected'
           payload={
               Log:setFinalStatus,
@@ -779,7 +796,7 @@ try {
                                     className="btn btn-success waves-effect waves-light m-1"
                                   >
                                     <i className="fe-check-circle me-1"></i>{" "}
-                                    Approve 2
+                                    Approve
                                   </button>
                                 </a>
                                 <a >

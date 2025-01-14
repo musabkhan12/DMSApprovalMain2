@@ -78,24 +78,13 @@ export const fetchAutomationDepartment = async (_sp) => {
     return arr;
   }
 
-  export const getMyApprovalsdata = async (_sp,listName,status) => {
-    let arr = []
-    let currentUser;
-    await _sp.web.currentUser()
-      .then(user => {
-        console.log("user",user);
-        currentUser = user.Email; // Get the current user's Email
-      })
-      .catch(error => {
-        console.error("Error fetching current user: ", error);
-        return [];
-      });
-  
-    if (!currentUser) return arr; // Return empty array if user fetch failed
-  
-    await _sp.web.lists.getByTitle(listName).items
+  export const getMyApprovalsdata = async (_sp,listName,status , Actingfor) => {
+    if(Actingfor != null && Actingfor != undefined && Actingfor != ""){
+      let arr = []
+      // alert(`acting for ${Actingfor} is not null in Automation and data`)
+      await _sp.web.lists.getByTitle(listName).items
       .select("*,Author/ID,Author/Title,Author/EMail,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail").expand("Author,AssignedTo")
-      .filter(`AssignedTo/EMail eq '${currentUser}' and Status eq '${status}'`)      
+      .filter(`AssignedTo/EMail eq '${Actingfor}' and Status eq '${status}'`)      
       .orderBy("Created", false).getAll()
       .then((res) => {
         console.log(`--MyApproval${listName}`, res);
@@ -110,6 +99,40 @@ export const fetchAutomationDepartment = async (_sp) => {
         console.log("Error fetching data: ", error);
       });
     return arr;
+    }else{
+      let arr = []
+      let currentUser;
+      await _sp.web.currentUser()
+        .then(user => {
+          console.log("user",user);
+          currentUser = user.Email; // Get the current user's Email
+        })
+        .catch(error => {
+          console.error("Error fetching current user: ", error);
+          return [];
+        });
+    
+      if (!currentUser) return arr; // Return empty array if user fetch failed
+    
+      await _sp.web.lists.getByTitle(listName).items
+        .select("*,Author/ID,Author/Title,Author/EMail,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail").expand("Author,AssignedTo")
+        .filter(`AssignedTo/EMail eq '${currentUser}' and Status eq '${status}'`)      
+        .orderBy("Created", false).getAll()
+        .then((res) => {
+          console.log(`--MyApproval${listName}`, res);
+          arr = res
+          // arr = res.filter(item => 
+          //     // Include public groups or private groups where the current user is in the InviteMembers array
+          //     item.GroupType === "Public" || 
+          //     (item.GroupType === "Private" && item.InviteMemebers && item.InviteMemebers.some(member => member.Id === currentUser))
+          //   );
+        })
+        .catch((error) => {
+          console.log("Error fetching data: ", error);
+        });
+      return arr;
+    }
+    
   }
     //Add Business Apps
     export const updateItem = async (itemData, _sp, id) => {
@@ -302,29 +325,54 @@ export const fetchAutomationDepartment = async (_sp) => {
       return resultArr;
     }
     //End
-  export const getApprovalListsData = async (_sp,status) => {
+  export const getApprovalListsData = async (_sp,status , Actingfor) => {
     let arr = []
-    
-    await _sp.web.lists.getByTitle("AllApprovalLists").items.orderBy("Created", false).getAll()
+    if(!Actingfor){ 
+      // alert(`acting for ${Actingfor} is not null in Automation`)
+      await _sp.web.lists.getByTitle("AllApprovalLists").items.orderBy("Created", false).getAll()
       .then(async (res) => {
         console.log("AllApprovallists",res);
         let AllApprovalArr = [];
         
         for (let i = 0; i < res.length; i++) {
-         await getMyApprovalsdata(_sp,res[i].Title,status).then((resData)=>{
+         await getMyApprovalsdata(_sp,res[i].Title,status , Actingfor).then((resData)=>{
             for (let j = 0; j < resData.length; j++) { 
               AllApprovalArr.push(resData[j])
             }
            
           })
         }
-        console.log("AllApprovalArr",AllApprovalArr);
+        console.log("AllApprovalArr in action for is not null",AllApprovalArr);
         arr = AllApprovalArr;
       })
       .catch((error) => {
         console.log("Error fetching data: ", error);
       });
     return arr;
+    }else{
+      // alert(`acting for ${Actingfor} is null in Automation`)
+      await _sp.web.lists.getByTitle("AllApprovalLists").items.orderBy("Created", false).getAll()
+      .then(async (res) => {
+        console.log("AllApprovallists",res);
+        let AllApprovalArr = [];
+        
+        for (let i = 0; i < res.length; i++) {
+         await getMyApprovalsdata(_sp,res[i].Title,status , Actingfor).then((resData)=>{
+            for (let j = 0; j < resData.length; j++) { 
+              AllApprovalArr.push(resData[j])
+            }
+           
+          })
+        }
+        console.log("AllApprovalArr in action for is not null",AllApprovalArr);
+        arr = AllApprovalArr;
+      })
+      .catch((error) => {
+        console.log("Error fetching data: ", error);
+      });
+    return arr;
+    }
+    
   }
   
   export const getMyRequestsdata = async (_sp,listName) => {

@@ -41,7 +41,7 @@ declare global {
   // import "./dmscss";
   // import "./DMSAdmincss"
   import { useState , useRef , useEffect} from "react";
-  import {IDmsapprovalProps} from './IDmsapprovalProps'
+  // import {IDmsapprovalProps} from './IDmsapprovalProps'
   import HorizontalNavbar from "../../horizontalNavBar/components/HorizontalNavBar";
   //  import EntityMapping from "./EntityMapping";
   
@@ -49,14 +49,14 @@ declare global {
   
   import  { faEye } from "@fortawesome/free-regular-svg-icons";
   import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-  import DMSMyApproval from "./MyApprovals";
+  // import DMSMyApproval from "./MyApprovals";
   let approvedLevel:any ='' 
   let filepreviewurl = ''
   let remark :any = ''
   let Level:any =''
   let setFinalStatus:any =''
-  let FileUID:any = ''
-  const DMSMyFolderApprovalAction = ({ props }: any) => {
+        let FileUID:any = ''
+  const DMSMyrequestaudithistory = ({ props }: any) => {
     console.log(props , "here is my props")
     const sp: SPFI = getSP();
   
@@ -168,53 +168,57 @@ declare global {
     setActiveComponent(Name); // Reset to show the main component
     console.log(activeComponent , "activeComponent updated")
   };
+  
+  const getUserTitleByEmail = async (userEmail:any) => {
+    try {
+      const user = await sp.web.siteUsers.getByEmail(userEmail)();
+      return user.Title;
+    } catch (error) {
+      console.error("Error fetching user title:", error);
+      return null;
+    }
+  };
     const getApprovalmasterTasklist = async () => {
+    //   alert(`DMSFileApprovalTaskList ${props}`)
       try {
-        const items = await sp.web.lists.getByTitle('DMSFolderDeligationApprovalTask').items.select(
-            "*",
-            "Folderdetail"	            
-            ,"Folderdetail/SiteTitle"	       
-            ,"Folderdetail/DocumentLibraryName"	
-            ,"Folderdetail/CurrentUser"
-            ,"Folderdetail/FolderPath"
-            ,"Folderdetail/FolderName"
-            ,"Folderdetail/ParentFolderId"
-            ,"Folderdetail/Department"	
-            ,"Folderdetail/Devision"	
-            ,"Folderdetail/RequestNo"	
-            ,"Folderdetail/Status"	
-            ,"Folderdetail/Created"	
-            ,"Remark"	
-            ,"Log"	
-            ,"LogHistory"	
-            ,"FolderMeta"	
-            ,"FolderMeta/SiteName"	
-            ,"FolderMeta/DocumentLibraryName"	
-            ,"FolderMeta/ColumnName",
-            "Folderdetail/ProcessName",
-            "Approver"
+        const items = await sp.web.lists.getByTitle('DMSFileApprovalTaskList').items.select(
+          "*",
+      "Log","CurrentUser","Remark"	 	
+           ,"LogHistory","ID"	                 
+           ,"FileUID/FileUID"	         
+           ,"FileUID/SiteName"	            
+           ,"FileUID/DocumentLibraryName" 
+           ,"FileUID/FileName"	              
+           ,"FileUID/RequestNo"	              
+          //  ,"FileUID/FilePreviewUrl" 
+           ,"FileUID/Status"	
+           ,"FileUID/FolderPath"	 
+           ,"FileUID/RequestedBy"	 
+           ,"FileUID/Created"	 
+           ,"FileUID/ApproveAction"
+           ,"MasterApproval/ApprovalType" 
+           ,"MasterApproval/Level"	 
+           ,"MasterApproval/DocumentLibraryName"	 
         )
-        .expand("Folderdetail" ,"FolderMeta")
-        .filter(`Folderdetail/RequestNo eq 'DMS20241216T062314010Z'`)
-        .orderBy("Modified", false)();
-        console.log(items, "DMSFolderApprovalTaskList");
+        .expand("FileUID", "MasterApproval")
+        .filter(`FileUID/FileUID eq '${props}'`)
+        .orderBy("Modified", false).getAll();
+        console.log(items, "DMSFileApprovalTaskList");
        
        
-  
-        // start
-        items.forEach((item)=>{
-            console.log("item to check and show approve" , item)
-            if(currentUserEmailRef.current === item.Folderdetail.CurrentUser && item.Log === null){
-                setToggleLog(true);
-            }
-             console.log("FileUID" , item.Folderdetail.RequestNo)
-             FileUID = item.Folderdetail.RequestNo
-            
-        })
-        // end
-  
-        setMylistdata(items);
+   // Fetch user titles
+      const updatedItems = await Promise.all(items.map(async (item) => {
+        const userTitle = await getUserTitleByEmail(item.FileUID.RequestedBy);
+        const assignedtouserTitle = await getUserTitleByEmail(item.CurrentUser);
+        alert(userTitle)
+        return { ...item, RequestedByTitle: userTitle  , assignedtouserTitle : assignedtouserTitle };
+      }));
         
+  
+      
+  
+        setMylistdata(updatedItems);
+        console.log(Mylistdata , "Mylistdata")
         
       } catch (error) {
         console.error("Error fetching list items:", error);
@@ -232,7 +236,27 @@ declare global {
         console.error("Error fetching list items:", error);
       }
     };
+    // const  getUserTitleByEmail = async (userEmail:any) => {
+    //   try {
+    //     // Get user by email
+    //     const user = await sp.web.siteUsers.getByEmail(userEmail)();
+    //     // Extract user title
+    //     const userName = user.Title;
+    //     // Return user title
+    //     return userName;
+    //   } catch (error) {
+    //     console.error("Error fetching user title:", error);
+    //     return null;
+    //   }
+    // }
+    const Mynewdata =async () =>{
+      const items = await sp.web.lists.getByTitle('DMSFileApprovalTaskList').items
+    .filter("FileUID/RequestNo eq 'e274710c-f990-46bb-86e7-934a91251cfa'")
+    .getAll();
   
+  console.log(items, "Filter Query");
+  
+    }
     console.log(Mylistdata , "Mylistdata")
     // start
     const [toggleLog,setToggleLog]=useState(false);
@@ -243,6 +267,7 @@ declare global {
       const userdata = await sp.web.currentUser();
       currentUserEmailRef.current = userdata.Email;
       getApprovalmasterTasklist();
+      Mynewdata()
     }
     useEffect(() => {
       getCurrrentuser()
@@ -259,7 +284,7 @@ declare global {
     }
   
     const truncateText = (text: string, maxLength: number) => {
-      return text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
+      return text?.length > maxLength ? text?.substring(0, maxLength) + "..." : text;
     };
   
     // start
@@ -406,12 +431,12 @@ declare global {
                         .then(async (items) => {
                             if (items.length > 0) {
                                 const itemId = items[0].Id; // Assuming one item per FileUID
-                                alert(`${itemId} item id is 1`)
+                                // alert(`${itemId} item id is 1`)
                                 await sp.web.lists.getByTitle("DMSFileApprovalList").items.getById(itemId).update({
                                     Status: "Approved",
                                 });
                                 console.log("Updated DMSFileApprovalList with Approved status");
-                                alert(`${itemId} Updated DMSFileApprovalList with Approved status`)
+                                // alert(`${itemId} Updated DMSFileApprovalList with Approved status`)
                             }
                         });
                       } catch (error) {
@@ -461,12 +486,12 @@ declare global {
                             .then(async (items) => {
                                 if (items.length > 0) {
                                     const itemId = items[0].Id; // Assuming one item per FileUID
-                                    alert(`${itemId} item id is 2`)
+                                    // alert(`${itemId} item id is 2`)
                                     await sp.web.lists.getByTitle("DMSFileApprovalList").items.getById(itemId).update({
                                         Status: "Approved",
                                     });
                                     console.log("Updated DMSFileApprovalList with Approved status");
-                                    alert(`${itemId} Updated DMSFileApprovalList with Approved status`)
+                                    // alert(`${itemId} Updated DMSFileApprovalList with Approved status`)
                                 }
                             });
                           } catch (error) {
@@ -549,8 +574,8 @@ declare global {
         console.log("Updated data",updateddata)
         if(buttonText === "Rework"){
           setFinalStatus = 'Rework'
-          alert(`this is SiteName ${filterData.FileUID.SiteName}`)
-          alert(`this is Filereqno ${filterData.FileUID.RequestNo}`)
+        //   alert(`this is SiteName ${filterData.FileUID.SiteName}`)
+        //   alert(`this is Filereqno ${filterData.FileUID.RequestNo}`)
           const updateStatusinMaster = await sp.web.lists.getByTitle(`DMS${filterData.FileUID.SiteName}FileMaster`).items.filter(`RequestNo eq '${filterData.FileUID.RequestNo}'`)()
           console.log(updateStatusinMaster , "updateStatusinMaster")
           for (let item of updateStatusinMaster) { 
@@ -565,7 +590,7 @@ declare global {
       if (getTaskdata && getTaskdata.length > 0) {
           console.log(getTaskdata, "getTaskdatagetTaskdata");
           for (const item of getTaskdata) {
-            alert(item.ID)
+            // alert(item.ID)
               await sp.web.lists.getByTitle("DMSFileApprovalTaskList").items.getById(item.ID).delete();
           }
       } else {
@@ -657,7 +682,7 @@ declare global {
                   <div>
                     <div className="content">
                   
-                     <h1>DMS Folder Approvals</h1>
+  
                       <div className="row">
                         <div className="col-12">
                          
@@ -677,13 +702,14 @@ declare global {
                                           >
                                                S.No
                                           </th>
-                                          <th>Request ID Folder</th>
+                                          <th>Level</th>
                                           {/* <th style={{ minWidth: '120px', maxWidth: '120px' }}>Process Name</th> */}
-                                          <th >Log</th>
-                                          <th>Log History</th>
-                                          <th>Requested By</th>
+                                          <th >Assigned To</th>
+                                   
+                                          <th>Requester Name</th>
                                           <th style={{ minWidth: '150px', maxWidth: '150px' }}>Requested Date</th>
-                                          <th style={{ minWidth: '80px', maxWidth: '80px' }}>Status</th>
+                                          <th style={{ minWidth: '150px', maxWidth: '150px' }}>Action Taken By</th>
+                                          <th style={{ minWidth: '150px', maxWidth: '150px' }}>Action Taken On</th>
                                           <th
                                             style={{
                                             minWidth: '70px',
@@ -693,6 +719,8 @@ declare global {
                                             >
                                               Remark
                                             </th>
+                                          <th style={{ minWidth: '80px', maxWidth: '80px' }}>Status</th>
+                                         
                                           </tr>
                                         </thead>
                                         <tbody style={{ maxHeight: '8007px' }}>
@@ -703,18 +731,23 @@ declare global {
                                                       <td style={{ minWidth: '40px', maxWidth: '40px' }}>
                                                         <span style={{marginLeft:'0px'}} className="indexdesign">
                                                         {index}</span></td>
-                                                      <td>{(truncateText(item.Folderdetail.RequestNo, 20))}
-                                                      </td>
-                                                      <td >{
-                                                        item.Folderdetail.Log
+                                                      {/* <td>{(truncateText(item.FileUID.FileUID, 20))}
+                                                      </td> */}
+                                                      <td >Level {
+                                                        item.MasterApproval.Level
                                                         }</td>
                                                         <td>
                                                           
                                                        
-                                                             {item.Folderdetail.LogHistory}
+                                                           {item.assignedtouserTitle}
+                                                            
+                                                             {/* {getUserTitleByEmail(item?.CurrentUser)} */}
   
                                                          </td>
-                                                      <td >{(truncateText(item.Folderdetail.CurrentUser, 25))}</td> 
+                                                      <td >
+                                                        {/* {(truncateText(item.FileUID.RequestedBy, 25))} */}
+                                                         {item.RequestedByTitle}
+                                                        </td> 
                                                       <td style={{ minWidth: '150px', maxWidth: '150px' }}>
                                                           <div
                                                             style={{
@@ -726,21 +759,76 @@ declare global {
                                                             }}
                                                             className="btn btn-light"
                                                           >
-                                                            {item.Folderdetail.Created}
-                                                          </div>
+                                                            {/* {new Date(item?.FileUID?.Created).toLocaleDateString()} */}
+                                                            {new Date(item?.FileUID?.Created).toLocaleString('en-US', { 
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true 
+  })}
+  
+                                                            </div>
+                                                        </td>
+                                                        <td style={{ minWidth: '150px', maxWidth: '150px' }}>
+                                                            { item?.FileUID?.Status  === "Approved" && (
+ <div
+ style={{
+   padding: '5px',
+   border: '1px solid #efefef',
+   background: '#fff',
+   borderRadius: '30px',fontSize:'14px',
+ 
+ }}
+ className="btn btn-light"
+>
+ {item.assignedtouserTitle}
+
+</div>
+                                                            ) }
+                                                           
+                                                      </td>
+                                                      <td style={{ minWidth: '150px', maxWidth: '150px' }}>
+                                                      { item?.FileUID?.Status  === "Approved" && ( 
+                                                             <div
+                                                             style={{
+                                                               padding: '5px',
+                                                               border: '1px solid #efefef',
+                                                               background: '#fff',
+                                                               borderRadius: '30px',fontSize:'14px',
+                                                             
+                                                             }}
+                                                             className="btn btn-light"
+                                                           >
+                                                             {/* {item.Modified} */}
+                                                             {new Date(item?.Modified).toLocaleString('en-US', { 
+     month: '2-digit',
+     day: '2-digit',
+     year: 'numeric',
+     hour: '2-digit',
+     minute: '2-digit',
+     second: '2-digit',
+     hour12: true 
+   })}
+                                                           </div>
+                                                      ) }
+                                                     
+                                                      </td>
+                                                      <td style={{ minWidth: '70px', maxWidth: '70px' }}>
+                                                        {item.Remark}
                                                       </td>
                                                       <td style={{ minWidth: '80px', maxWidth: '80px', textAlign:'center' }}>
                                                           {/* <div className="finish mb-0"></div> */}
-                                                          <div className="finish mb-0">  {item.Folderdetail.Status} </div>
+                                                          <div className="finish mb-0">  {item.FileUID.Status} </div>
                                                           </td>
                                                       {/* <td style={{ minWidth: '70px', maxWidth: '70px' }}>
                                                             <a onClick={(e )=>getTaskItemsbyID(e , item.FileUID.FileUID)}>
                                                                 <FontAwesomeIcon icon={faEye} />
                                                             </a>
                                                       </td> */}
-                                                      <td style={{ minWidth: '70px', maxWidth: '70px' }}>
-                                                        {item.Folderdetail.Remark}
-                                                      </td>
+                                                      
                                                       </tr>
                                                         )
                                                               })
@@ -853,5 +941,5 @@ declare global {
   
   
   
-  export default DMSMyFolderApprovalAction;
+  export default DMSMyrequestaudithistory;
   

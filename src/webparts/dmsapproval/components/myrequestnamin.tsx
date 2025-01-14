@@ -109,7 +109,8 @@ import { getAnncouncementByID } from "../../../APISearvice/AnnouncementsService"
 import DMSMyrequestLog from "./DMSMyrequestLog";
 // import { WorkflowAuditHistory } from "../../../CustomJSComponents/WorkflowAuditHistory/WorkflowAuditHistory";
 import { Button, Modal } from "react-bootstrap";
-
+import DMSFolderreqLog from "./DMSFolderreqLog";
+import Myrequestaudithistory from './DMSMyrequestAuditHistory'
 const MyRequestContext = ({ props }: any) => {
 
   const sp: SPFI = getSP();
@@ -1572,9 +1573,9 @@ const handleCloseModal = () => {
 
                                     >
 
-                                      {/* {item.ProcessName} */}
-                                      {activeTab == "Automation" ? item?.ProcessName : item?.SourceName}
-
+                                      {item.ProcessName}
+                                      {/* {activeTab == "Automation" ? item?.ProcessName : item?.SourceName} */}
+                                        
                                     </td>
 
                                     {/* <td
@@ -1881,7 +1882,62 @@ const handleCloseModal = () => {
           
               </th>
           
-             
+              <th style={{ minWidth: "100px", maxWidth: "100px" }}>
+          
+          <div className="d-flex flex-column bd-highlight ">
+    
+            <div
+    
+              className="d-flex  pb-2"
+    
+              style={{ justifyContent: "space-between" }}
+    
+            >
+    
+              <span>Requested Date</span>{" "}
+    
+              <span
+    
+                onClick={() =>
+    
+                  handleSortChange("RequestedBy")
+    
+                }
+    
+              >
+    
+                <FontAwesomeIcon icon={faSort} />{" "}
+    
+              </span>
+    
+            </div>
+    
+            <div className=" bd-highlight">
+    
+              <input
+    
+                type="text"
+    
+                placeholder="Filter by Requested Date"
+    
+                onChange={(e) =>
+    
+                  handleFilterChange(e, "RequestedBy")
+    
+                }
+    
+                className="inputcss"
+    
+                style={{ width: "100%" }}
+    
+              />
+    
+            </div>
+    
+          </div>
+    
+              </th>
+            
           
               <th style={{ minWidth: "80px", maxWidth: "80px" }}>
           
@@ -1934,62 +1990,7 @@ const handleCloseModal = () => {
                 </div>
           
               </th>
-              <th style={{ minWidth: "100px", maxWidth: "100px" }}>
-          
-          <div className="d-flex flex-column bd-highlight ">
-    
-            <div
-    
-              className="d-flex  pb-2"
-    
-              style={{ justifyContent: "space-between" }}
-    
-            >
-    
-              <span>Requested Date</span>{" "}
-    
-              <span
-    
-                onClick={() =>
-    
-                  handleSortChange("RequestedBy")
-    
-                }
-    
-              >
-    
-                <FontAwesomeIcon icon={faSort} />{" "}
-    
-              </span>
-    
-            </div>
-    
-            <div className=" bd-highlight">
-    
-              <input
-    
-                type="text"
-    
-                placeholder="Filter by Approver By"
-    
-                onChange={(e) =>
-    
-                  handleFilterChange(e, "RequestedBy")
-    
-                }
-    
-                className="inputcss"
-    
-                style={{ width: "100%" }}
-    
-              />
-    
-            </div>
-    
-          </div>
-    
-        </th>
-            
+             
                 
               <th
          
@@ -2016,7 +2017,7 @@ const handleCloseModal = () => {
          
            >
          
-             <span>Action</span>{" "}
+             <span>View Details</span>{" "}
          
          
            </div>
@@ -2095,7 +2096,7 @@ const handleCloseModal = () => {
                   >
           
                     {/* {item.RequestID} */}
-                    {item.FileUID}
+                    {item?.RequestNo}
           
                   </td>
           
@@ -2125,7 +2126,7 @@ const handleCloseModal = () => {
                   >
           
                     {/* {item.ProcessName} */}
-                    DMS
+                    {item?.Processname}
           
                   </td>
           
@@ -2152,7 +2153,17 @@ const handleCloseModal = () => {
           
                   >
           
-                    {new Date(item?.Created).toLocaleDateString()}
+                    {/* {new Date(item?.Created).toLocaleDateString()} */}
+                    {new Date(item?.Created).toLocaleString('en-US', { 
+  month: '2-digit',
+  day: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true 
+})}
+
           
                   </td>
           
@@ -2163,10 +2174,8 @@ const handleCloseModal = () => {
                     className="fe-eye font-18"
           
                   >
-          
-          
-          
-          <Eye onClick={() => {getTaskItemsbyID(item.FileUID) ; handleShowNestedDMSTable("DMSAuditHistory")}}
+           
+                   {item?.Processname == "New File Request" ?  <Eye onClick={() => {getTaskItemsbyID(item.FileUID) ; handleShowNestedDMSTable("DMSAuditHistory")}}
           
           style={{
           
@@ -2178,7 +2187,21 @@ const handleCloseModal = () => {
           
           cursor: "pointer",
           
-          }} />
+          }} /> : item?.Processname == "New Folder Request" ?  <Eye onClick={() => {getTaskItemsbyID(item.FileUID) ; handleShowNestedDMSTable("DMSFolderAuditHistory")}}
+          
+          style={{
+          
+          minWidth: "20px",
+          
+          maxWidth: "20px",
+          
+          marginLeft: "15px",
+          
+          cursor: "pointer",
+          
+          }} /> : null}
+           
+         
           
                    
           
@@ -2195,10 +2218,10 @@ const handleCloseModal = () => {
                         </table>
                         <Modal show={showModal2} onHide={handleCloseModal}>
              <Modal.Header closeButton>
-               <Modal.Title>DMS Audit History</Modal.Title>
+               <Modal.Title>DMS Audit History 1</Modal.Title>
              </Modal.Header>
              <Modal.Body>
-               <DMSMyrequestLog props={currentItemID} />
+               <Myrequestaudithistory props={currentItemID} />
              </Modal.Body>
              <Modal.Footer>
                <Button variant="secondary" onClick={handleCloseModal}>
@@ -2232,14 +2255,24 @@ const handleCloseModal = () => {
                        <div>
                            <div>
                           <button style={{float:'right'}} type="button" className="btn btn-secondary" onClick={() => setShowNestedDMSTable("")}> Back </button>
-                         <DMSMyrequestLog props={currentItemID}/>
+                         <DMSMyrequestLog props={currentItemID }/>
                            </div>
                        </div>
                      </div>
                      )
                     
-                     :
-                     null}
+                     : showNestedDMSTable === "DMSFolderAuditHistory" ? 
+                     (
+                        <div>
+                        <div>
+                            <div>
+                           <button style={{float:'right'}} type="button" className="btn btn-secondary" onClick={() => setShowNestedDMSTable("")}> Back </button>
+                         <DMSFolderreqLog props={currentItemID}/>
+                            </div>
+                        </div>
+                        </div>
+                     )
+                     : null}
                    </div>
                     )}
                   </div>

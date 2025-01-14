@@ -58,6 +58,9 @@ declare global {
         let FileUID:any = ''
   const DMSMyApprovalAction = ({ props }: any) => {
     console.log(props , "here is my props")
+    // alert(`here is my currentitemID ${props.currentItemID}`)    
+    // alert(`here is my actingforuseremail ${props.actingforuseremail}`)    
+
     const sp: SPFI = getSP();
   
     const { useHide }: any = React.useContext(UserContext);
@@ -164,6 +167,16 @@ declare global {
   const [activeComponent, setActiveComponent] = useState<string >('');
   ////
   console.log(activeComponent , "activeComponent")
+  
+  const getUserTitleByEmail = async (userEmail:any) => {
+    try {
+      const user = await sp.web.siteUsers.getByEmail(userEmail)();
+      return user.Title;
+    } catch (error) {
+      console.error("Error fetching user title:", error);
+      return null;
+    }
+  };
   const handleReturnToMain = (Name:any) => {
     setActiveComponent(Name); // Reset to show the main component
     console.log(activeComponent , "activeComponent updated")
@@ -189,10 +202,18 @@ declare global {
            ,"MasterApproval/DocumentLibraryName"	 
         )
         .expand("FileUID", "MasterApproval")
-        .filter(`FileUID/FileUID eq '${props}'`)
+        .filter(`FileUID/FileUID eq '${props.currentItemID}'`)
         .orderBy("Modified", false)();
         console.log(items, "DMSFileApprovalTaskList");
-       
+         // Fetch user titles
+      const updatedItems = await Promise.all(items.map(async (item) => {
+      const userTitle = await getUserTitleByEmail(item.FileUID.RequestedBy);
+      const assignedtouserTitle = await getUserTitleByEmail(item.CurrentUser);
+  
+      // alert(userTitle)
+      return { ...item, RequestedByTitle: userTitle , AssignedToTitle:assignedtouserTitle};
+    }));
+      
        
   
         // start
@@ -201,7 +222,7 @@ declare global {
           console.log(currentUserEmailRef.current , "currentUserEmailRef.current")
           console.log(item.CurrentUser , "item.CurrentUser")
           console.log(item.Log , "item.Log")
-            if(currentUserEmailRef.current === item.CurrentUser){
+            if(currentUserEmailRef.current === item.CurrentUser || props.actingforuseremail === item.CurrentUser){
               if(item.LogHistory === null){
                 setToggleLog(true);
               }
@@ -213,7 +234,7 @@ declare global {
         })
         // end
   
-        setMylistdata(items);
+        setMylistdata(updatedItems);
         
         
       } catch (error) {
@@ -222,12 +243,98 @@ declare global {
       try {
         console.log("here")
         const updatedData:any = await sp.web.lists.getByTitle("DMSFileApprovalList").items
-        .select("FileUID", "ID", "ApproveAction", "ApprovedLevel", "SiteName", "DocumentLibraryName", "ApprovedLevel" , "FilePreviewUrl")
+        .select("FileUID", "ID", "ApproveAction", "ApprovedLevel", "SiteName", "DocumentLibraryName", "ApprovedLevel" , "FilePreviewUrl","FolderPath" , "FileName")
         .filter(`FileUID eq '${FileUID}'`)()
         .catch((error) => console.error("Error fetching data from DMSFileApprovalList:", error));
         console.log(updatedData , "updatedData")
           filepreviewurl = updatedData[0]?.FilePreviewUrl;
           console.log(filepreviewurl , "file url")
+  
+          const siteData=await sp.web.lists.getByTitle('MasterSiteURL').items.select("Id","SiteID").filter(`Title eq '${updatedData[0]?.SiteName}'`)();
+          console.log("siteData",siteData);
+          const {web}=await sp.site.openWebById(siteData[0].SiteID);
+      
+         // Get the list item  corresponding to the file
+         const fileItem:any = await web.getFileById(props.currentItemID).expand("ListItemAllFields")();
+         console.log("fileItem",fileItem.ListItemAllFields.Status);
+        
+        // fetched the columns details corresponding to the file 
+        const fileColumns =await sp.web.lists.getByTitle("DMSPreviewFormMaster").items.select("ColumnName","SiteName","DocumentLibraryName","IsRename").filter(`SiteName eq '${updatedData[0]?.SiteName}' and DocumentLibraryName eq '${updatedData[0]?.DocumentLibraryName}' and IsDocumentLibrary ne 1`)();
+        console.log("fileColumns",fileColumns);
+      
+        // Create an array of objects to store the columnName with there corresponding value
+        const resultArrayThatContainstheColumnDetails = fileColumns.map((column) => {
+          
+        let columnName = column.ColumnName;
+        const columnValue = fileItem.ListItemAllFields[columnName];
+          if(column.IsRename !== null){
+            columnName=column.IsRename
+          }
+      
+          return {
+            label: columnName,
+            value: columnValue !== undefined ? columnValue : null // Handle missing fields
+          };
+        });
+      
+        const objectForStatus={
+          label:"Status",
+          value:fileItem.ListItemAllFields.Status || ""
+        }
+         const objectforfilename = {
+          label:"File Name",
+          value:updatedData[0]?.FileName
+         }
+        const objectForDocumentLibrary={
+          label:"Folder Name",
+          value:updatedData[0]?.FolderPath.substring(updatedData[0]?.FolderPath.lastIndexOf('/') + 1) || ""
+        }
+  
+        const objectForSiteName={
+          label:"Site Name",
+          value:updatedData[0]?.SiteName || ""
+        }
+      
+        resultArrayThatContainstheColumnDetails.push(objectForStatus);
+        resultArrayThatContainstheColumnDetails.push(objectforfilename);
+         resultArrayThatContainstheColumnDetails.push(objectForSiteName);
+         resultArrayThatContainstheColumnDetails.push(objectForDocumentLibrary);
+        console.log("result",resultArrayThatContainstheColumnDetails);
+        // Variable to hold generated HTML
+      let detailRowsHTML = "";
+      
+      // Dynamically generate HTML with inline CSS
+      resultArrayThatContainstheColumnDetails.forEach((item, index) => {
+        // Start a new row every 3rd item
+        if (index % 3 === 0) {
+          detailRowsHTML += `<div style="display: flex; gap: 15px; margin-bottom: 10px;">`;
+        }
+      
+        // Add detail column for each item with inline CSS
+        detailRowsHTML += `
+          <div style="flex: 1;  padding: 10px; ">
+            <div style="font-weight: bold; margin-bottom: 5px;">${item.label}</div>
+            <div>${item.value}</div>
+          </div>
+        `;
+      
+        // Close the row after every 3rd item
+        if ((index + 1) % 3 === 0) {
+          detailRowsHTML += `</div>`;
+        }
+      });
+      
+      // Close the last row if not already closed
+      if (resultArrayThatContainstheColumnDetails.length % 3 !== 0) {
+        detailRowsHTML += `</div>`;
+      }
+      
+      // Add the generated HTML to a container
+      document.getElementById("dynamicDetailsContainer").innerHTML = detailRowsHTML;
+  
+      if(filepreviewurl){
+        previewFile(filepreviewurl)
+      }
       } catch (error) {
         console.error("Error fetching list items:", error);
       }
@@ -280,7 +387,7 @@ declare global {
         // const date =new Date();
         // const isoDate = date.toISOString();
         // console.log(isoDate);
-        const filterData=Mylistdata.find((item)=> item.CurrentUser === currentUserEmailRef.current)
+        const filterData=Mylistdata.find((item)=> item.CurrentUser === currentUserEmailRef.current || item.CurrentUser === props.actingforuseremail);
         console.log("filtered data Level",filterData.MasterApproval.Level);
         console.log("filterData id",filterData.FileUID.FileUID);
         console.log("filterData Id",filterData.Id);
@@ -295,241 +402,488 @@ declare global {
   
         let payload;
         if(buttonText === "Approve"){
-          const updatedData = await sp.web.lists.getByTitle("DMSFileApprovalList").items
-          .select("FileUID", "ID", "ApproveAction", "ApprovedLevel", "SiteName", "DocumentLibraryName", "ApprovedLevel" , "FilePreviewUrl")
-          .filter(`FileUID eq '${filterData.FileUID.FileUID}'`)()
-          .catch((error) => console.error("Error fetching data from DMSFileApprovalList:", error));
-          console.log(updatedData , "updatedData")
-          
-          if (updatedData && updatedData.length > 0) {
-            const mydat = updatedData[0]; // Assuming you want to compare using the first item's SiteName
-            filepreviewurl =  mydat?.FilePreviewUrl
-            console.log(mydat?.FilePreviewUrl , "items,,,,")
-            approvedLevel = mydat.ApprovedLevel
-            // Step 3: Fetch data from the second list where SiteName matches
-            const updatedata2 = await sp.web.lists.getByTitle("DMSFolderPermissionMaster").items
-            .filter(`SiteName eq '${mydat.SiteName}' and DocumentLibraryName eq '${mydat.DocumentLibraryName}' and Level eq ${mydat.ApprovedLevel}`)()
-              .catch((error:any) => console.error("Error fetching data from DMSFolderPermissionMaster:", error));
+          if(props.actingforuseremail !== '' || props.actingforuseremail !== null || props.actingforuseremail !== undefined){
+            // alert(`here approved and ${props.actingforuseremail} acting for is null`)
+            const updatedData = await sp.web.lists.getByTitle("DMSFileApprovalList").items
+            .select("FileUID", "ID", "ApproveAction", "ApprovedLevel", "SiteName", "DocumentLibraryName", "ApprovedLevel" , "FilePreviewUrl")
+            .filter(`FileUID eq '${filterData.FileUID.FileUID}'`)()
+            .catch((error) => console.error("Error fetching data from DMSFileApprovalList:", error));
+            console.log(updatedData , "updatedData")
             
-              const getTaskdata = await sp.web.lists.getByTitle("DMSFileApprovalTaskList").items.filter(`FileUID/FileUID eq '${filterData.FileUID.FileUID}'`) 
-              .select("FileUID/FileUID", "MasterApproval/ApprovalType", "CurrentUser", "Log") 
-              .expand("FileUID", "MasterApproval")()
-              console.log(getTaskdata ,"getTaskdata")
-            console.log(updatedata2 , "here is my data");
-           
-            getTaskdata.forEach(item => {
-              console.log(item.CurrentUser , "CurrentUser")
-                // Step 1: Check if CurrentUser matches the stored user
-                if (item.CurrentUser === currentUserEmailRef.current) {
-                  // Step 2: Check ApprovalType
-                  if (item.MasterApproval.ApprovalType === 0) {
-                    console.log(approvedLevel, "approvedLevel first in 0")
-                    // If ApprovalType is 0, set state to 'done'
-                    setApprovedStatus('Approved');
-                    console.log("entere here in 0 for approval level" ,filterData.FileUID.FileUID , mydat.ApprovedLevel )
-                     console.log("entere here in 0" , ApprovedStatus)
-                     approvedLevel =mydat.ApprovedLevel+1
-                     setFinalStatus = "Approved"
-                     console.log(approvedLevel, "approvedLevel second in 1")
-                  } else if (item.MasterApproval.ApprovalType === 1) {
-                    // Step 3: If ApprovalType is 1, check the Log field
-                    let nonNullLogCount = 0;
-                    let totalItems = getTaskdata.length;
-        
-                    getTaskdata.forEach(logItem => {
-                      if (logItem.Log !== null) {
-                        nonNullLogCount++;
-                      }
-                    });
-        
-                    // If more than 5 out of 6 Logs are not null, set 'approvalInProgress'
-                    if (nonNullLogCount >= totalItems - 1) {
-                      console.log(approvedLevel, "approvedLevel first in 1")
-                      approvedLevel =mydat.ApprovedLevel+1
-                      setFinalStatus = "Approved"
+            if (updatedData && updatedData.length > 0) {
+              const mydat = updatedData[0]; // Assuming you want to compare using the first item's SiteName
+              filepreviewurl =  mydat?.FilePreviewUrl
+              console.log(mydat?.FilePreviewUrl , "items,,,,")
+              approvedLevel = mydat.ApprovedLevel
+              // Step 3: Fetch data from the second list where SiteName matches
+              const updatedata2 = await sp.web.lists.getByTitle("DMSFolderPermissionMaster").items
+              .filter(`SiteName eq '${mydat.SiteName}' and DocumentLibraryName eq '${mydat.DocumentLibraryName}' and Level eq ${mydat.ApprovedLevel}`)()
+                .catch((error:any) => console.error("Error fetching data from DMSFolderPermissionMaster:", error));
+              
+                const getTaskdata = await sp.web.lists.getByTitle("DMSFileApprovalTaskList").items.filter(`FileUID/FileUID eq '${filterData.FileUID.FileUID}'`) 
+                .select("FileUID/FileUID", "MasterApproval/ApprovalType", "CurrentUser", "Log") 
+                .expand("FileUID", "MasterApproval")()
+                console.log(getTaskdata ,"getTaskdata")
+              console.log(updatedata2 , "here is my data");
+             
+              getTaskdata.forEach(item => {
+                console.log(item.CurrentUser , "CurrentUser")
+                  // Step 1: Check if CurrentUser matches the stored user
+                  if (item.CurrentUser === currentUserEmailRef.current || item.CurrentUser === props.actingforuseremail) {
+                    // Step 2: Check ApprovalType
+                    if (item.MasterApproval.ApprovalType === 0) {
+                      console.log(approvedLevel, "approvedLevel first in 0")
+                      // If ApprovalType is 0, set state to 'done'
                       setApprovedStatus('Approved');
-                      console.log("entere here in 1 for approval level" ,filterData.FileUID.FileUID , mydat.ApprovedLevel+1 )
-                      console.log("entere here in 1" , ApprovedStatus)
-                      console.log(approvedLevel, "approvedLevel second in 1")
+                      console.log("entere here in 0 for approval level" ,filterData.FileUID.FileUID , mydat.ApprovedLevel )
+                       console.log("entere here in 0" , ApprovedStatus)
+                       approvedLevel =mydat.ApprovedLevel+1
+                       setFinalStatus = "Approved"
+                       console.log(approvedLevel, "approvedLevel second in 1")
+                    } else if (item.MasterApproval.ApprovalType === 1) {
+                      // Step 3: If ApprovalType is 1, check the Log field
+                      let nonNullLogCount = 0;
+                      let totalItems = getTaskdata.length;
+          
+                      getTaskdata.forEach(logItem => {
+                        if (logItem.Log !== null) {
+                          nonNullLogCount++;
+                        }
+                      });
+          
+                      // If more than 5 out of 6 Logs are not null, set 'approvalInProgress'
+                      if (nonNullLogCount >= totalItems - 1) {
+                        console.log(approvedLevel, "approvedLevel first in 1")
+                        approvedLevel =mydat.ApprovedLevel+1
+                        setFinalStatus = "Approved"
+                        setApprovedStatus('Approved');
+                        console.log("entere here in 1 for approval level" ,filterData.FileUID.FileUID , mydat.ApprovedLevel+1 )
+                        console.log("entere here in 1" , ApprovedStatus)
+                        console.log(approvedLevel, "approvedLevel second in 1")
+                      }else{
+                        // thhis i have added
+                          setFinalStatus = "Approved"
+                      }
                     }
                   }
-                }
-              });
-            
-          } else {
-            console.log("No matching data found in DMSFileApprovalList."); 
-          }
-           //start
-  try {
-    const updatedData1:any = await sp.web.lists.getByTitle("DMSFileApprovalList").items
-    .select("FileUID", "ID", "ApproveAction", "ApprovedLevel", "SiteName", "DocumentLibraryName", "ApprovedLevel" , "FilePreviewUrl")
-    .filter(`FileUID eq '${FileUID}'`)()
-    .catch((error) => console.error("Error fetching data from DMSFileApprovalList:", error));
-    console.log(updatedData1 , "updatedData")
-  
-  
-      filepreviewurl = updatedData1[0]?.FilePreviewUrl;
-      Level = updatedData1[0].ApprovedLevel;
-      console.log(updatedData1[0] , "DocumentLibraryName")
-  
-      const getdatafromfoldermaster = await sp.web.lists.getByTitle("DMSFolderPermissionMaster").items
-      .filter(`SiteName eq '${updatedData1[0].SiteName}' and DocumentLibraryName eq '${updatedData1[0].DocumentLibraryName}'`)()
-      console.log(getdatafromfoldermaster , "getdatafromfoldermaster")
-     
-      let maxLevel=0;
-      getdatafromfoldermaster.forEach((item)=>{
-        if(item.Level >= maxLevel){
-          maxLevel=item.Level;
-        }
-      })
-  
-      console.log("MaxLevel ",maxLevel);
-  
-      if(Level === maxLevel){
-  
-        const taskdata = await sp.web.lists.getByTitle("DMSFileApprovalTaskList").items.filter(`FileUID/FileUID eq '${filterData.FileUID.FileUID}'`)
-        .select("FileUID/FileUID", "MasterApproval/ApprovalType", "CurrentUser", "Log")
-        .expand("FileUID", "MasterApproval")()
-  
-        console.log("getData from DMSFileApprovalTaskList",taskdata);
-  
-        taskdata.forEach(async (item)=>{
-          if(item.CurrentUser === currentUserEmailRef.current){
-  
-                if(item.MasterApproval.ApprovalType === 0){
-                      setFinalStatus="FinalApproved";
-                      try {
-                        await sp.web.lists.getByTitle("DMSFileApprovalList").items
-                        .filter(`FileUID eq '${filterData.FileUID.FileUID}'`)()
-                        .then(async (items) => {
-                            if (items.length > 0) {
-                                const itemId = items[0].Id; // Assuming one item per FileUID
-                                alert(`${itemId} item id is 1`)
-                                await sp.web.lists.getByTitle("DMSFileApprovalList").items.getById(itemId).update({
-                                    Status: "Approved",
-                                });
-                                console.log("Updated DMSFileApprovalList with Approved status");
-                                alert(`${itemId} Updated DMSFileApprovalList with Approved status`)
-                            }
-                        });
-                      } catch (error) {
-                         console.log(error , "Error updating DMSFileApprovalList status");
-                      }
-                      try {
-                        // Update Column Status on Document library or folder
-                        // updatedData1[0].DocumentLibraryName
-                        // FileUID
-                        // New code start
-                        const siteName=updatedData1[0].SiteName
-                       // console.log("siteName",siteName);
-                       const subsite = await sp.web.webs.filter(`Title eq '${siteName}'`)();
-                       // console.log(subsite , "subsite");
-                       // console.log("subsite id",subsite[0].Id)
-                
-                        const {web} = await sp.site.openWebById(subsite[0].Id)
-                       // end
-                       // get the details of the file present inside the document library
-                       const file=  web.getFileById(filterData.FileUID.FileUID);
-                       const listItem = await file.getItem();        
-                       const updatedData =await listItem.update({
-                         Status:"Approved"  
-                       });
-                       console.log("updatedData",updatedData);
-                      } catch (error) {
-                        console.log(error , "Error updating status column on Libray or Folder");
-                      }
-                     
-                    
-                }else if(item.MasterApproval.ApprovalType === 1){
-  
-                    let approvedUser=0;
-                    let numberOfUser=taskdata.length;
-  
-                    taskdata.forEach(logItem => {
-                      if (logItem.Log !== null) {
-                        approvedUser++;
-                      }
-                    });
-  
-                    if(approvedUser >= numberOfUser - 1){
-                          setFinalStatus="FinalApproved";
-                          try {
-                            await sp.web.lists.getByTitle("DMSFileApprovalList").items
-                            .filter(`FileUID eq '${filterData.FileUID.FileUID}'`)()
-                            .then(async (items) => {
-                                if (items.length > 0) {
-                                    const itemId = items[0].Id; // Assuming one item per FileUID
-                                    alert(`${itemId} item id is 2`)
-                                    await sp.web.lists.getByTitle("DMSFileApprovalList").items.getById(itemId).update({
-                                        Status: "Approved",
-                                    });
-                                    console.log("Updated DMSFileApprovalList with Approved status");
-                                    alert(`${itemId} Updated DMSFileApprovalList with Approved status`)
-                                }
-                            });
-                          } catch (error) {
-                             console.log(error , "Error updating DMSFileApprovalList status");
-                          }
-                          try {
-                            // Update Column Status on Document library or folder
-                            // updatedData1[0].DocumentLibraryName
-                            // FileUID
-                            // New code start
-                            const siteName=updatedData1[0].SiteName
-                           // console.log("siteName",siteName);
-                           const subsite = await sp.web.webs.filter(`Title eq '${siteName}'`)();
-                           // console.log(subsite , "subsite");
-                           // console.log("subsite id",subsite[0].Id)
-                    
-                            const {web} = await sp.site.openWebById(subsite[0].Id)
-                           // end
-                           // get the details of the file present inside the document library
-                           const file=  web.getFileById(filterData.FileUID.FileUID);
-                           const listItem = await file.getItem();        
-                           const updatedData =await listItem.update({
-                             Status:"Approved"  
-                           });
-                           console.log("updatedData",updatedData);
-                          } catch (error) {
-                            console.log(error , "Error updating status column on Libray or Folder");
-                          }
-  
-                    }
-  
-                }
-          }
-         
-        })
-  
-      }else{
-        setFinalStatus="Approved";
-        console.log("Level is not equal to max level",Level);
-        console.log("FinalStatus",setFinalStatus);
-  
-  
-      }
-  
-  } catch (error) {
-    console.error("Error fetching list items:", error);
-  }
-  // end
+                });
               
-            payload={
-                Log:setFinalStatus,
-                LogHistory:isoDate,
-                Remark:remark,
-                // ApprovedLevel:approvedLevel
+            } else {
+              console.log("No matching data found in DMSFileApprovalList."); 
             }
+             //start
+    try {
+      const updatedData1:any = await sp.web.lists.getByTitle("DMSFileApprovalList").items
+      .select("FileUID", "ID", "ApproveAction", "ApprovedLevel", "SiteName", "DocumentLibraryName", "ApprovedLevel" , "FilePreviewUrl")
+      .filter(`FileUID eq '${FileUID}'`)()
+      .catch((error) => console.error("Error fetching data from DMSFileApprovalList:", error));
+      console.log(updatedData1 , "updatedData")
+    
+    
+        filepreviewurl = updatedData1[0]?.FilePreviewUrl;
+        Level = updatedData1[0].ApprovedLevel;
+        console.log(updatedData1[0] , "DocumentLibraryName")
+    
+        const getdatafromfoldermaster = await sp.web.lists.getByTitle("DMSFolderPermissionMaster").items
+        .filter(`SiteName eq '${updatedData1[0].SiteName}' and DocumentLibraryName eq '${updatedData1[0].DocumentLibraryName}'`)()
+        console.log(getdatafromfoldermaster , "getdatafromfoldermaster")
+       
+        let maxLevel=0;
+        getdatafromfoldermaster.forEach((item)=>{
+          if(item.Level >= maxLevel){
+            maxLevel=item.Level;
+          }
+        })
+    
+        console.log("MaxLevel ",maxLevel);
+    
+        if(Level === maxLevel){
+    
+          const taskdata = await sp.web.lists.getByTitle("DMSFileApprovalTaskList").items.filter(`FileUID/FileUID eq '${filterData.FileUID.FileUID}'`)
+          .select("FileUID/FileUID", "MasterApproval/ApprovalType", "CurrentUser", "Log")
+          .expand("FileUID", "MasterApproval")()
+    
+          console.log("getData from DMSFileApprovalTaskList",taskdata);
+    
+          taskdata.forEach(async (item)=>{
+            if(item.CurrentUser === currentUserEmailRef.current || item.CurrentUser === props.actingforuseremail){
+    
+                  if(item.MasterApproval.ApprovalType === 0){
+                        setFinalStatus="FinalApproved";
+                        try {
+                          await sp.web.lists.getByTitle("DMSFileApprovalList").items
+                          .filter(`FileUID eq '${filterData.FileUID.FileUID}'`)()
+                          .then(async (items) => {
+                              if (items.length > 0) {
+                                  const itemId = items[0].Id; // Assuming one item per FileUID
+                                  // alert(`${itemId} item id is 1`)
+                                  await sp.web.lists.getByTitle("DMSFileApprovalList").items.getById(itemId).update({
+                                      Status: "Approved",
+                                  });
+                                  console.log("Updated DMSFileApprovalList with Approved status");
+                                  // alert(`${itemId} Updated DMSFileApprovalList with Approved status`)
+                              }
+                          });
+                          
+                        } catch (error) {
+                           console.log(error , "Error updating DMSFileApprovalList status");
+                        }
+                        try {
+                          // Update Column Status on Document library or folder
+                          // updatedData1[0].DocumentLibraryName
+                          // FileUID
+                          // New code start
+                          const siteName=updatedData1[0].SiteName
+                         // console.log("siteName",siteName);
+                         const subsite = await sp.web.webs.filter(`Title eq '${siteName}'`)();
+                         // console.log(subsite , "subsite");
+                         // console.log("subsite id",subsite[0].Id)
+                  
+                          const {web} = await sp.site.openWebById(subsite[0].Id)
+                         // end
+                         // get the details of the file present inside the document library
+                         const file=  web.getFileById(filterData.FileUID.FileUID);
+                         const listItem = await file.getItem();        
+                         const updatedData =await listItem.update({
+                           Status:"Approved"  
+                         });
+                         console.log("updatedData",updatedData);
+                        } catch (error) {
+                          console.log(error , "Error updating status column on Libray or Folder");
+                        }
+                       
+                      
+                  }else if(item.MasterApproval.ApprovalType === 1){
+    
+                      let approvedUser=0;
+                      let numberOfUser=taskdata.length;
+    
+                      taskdata.forEach(logItem => {
+                        if (logItem.Log !== null) {
+                          approvedUser++;
+                        }
+                      });
+    
+                      if(approvedUser >= numberOfUser - 1){
+                            setFinalStatus="FinalApproved";
+                            try {
+                              await sp.web.lists.getByTitle("DMSFileApprovalList").items
+                              .filter(`FileUID eq '${filterData.FileUID.FileUID}'`)()
+                              .then(async (items) => {
+                                  if (items.length > 0) {
+                                      const itemId = items[0].Id; // Assuming one item per FileUID
+                                      // alert(`${itemId} item id is 2`)
+                                      await sp.web.lists.getByTitle("DMSFileApprovalList").items.getById(itemId).update({
+                                          Status: "Approved",
+                                      });
+                                      console.log("Updated DMSFileApprovalList with Approved status");
+                                      // alert(`${itemId} Updated DMSFileApprovalList with Approved status`)
+                                  }
+                              });
+                            } catch (error) {
+                               console.log(error , "Error updating DMSFileApprovalList status");
+                            }
+                            try {
+                              // Update Column Status on Document library or folder
+                              // updatedData1[0].DocumentLibraryName
+                              // FileUID
+                              // New code start
+                              const siteName=updatedData1[0].SiteName
+                             // console.log("siteName",siteName);
+                             const subsite = await sp.web.webs.filter(`Title eq '${siteName}'`)();
+                             // console.log(subsite , "subsite");
+                             // console.log("subsite id",subsite[0].Id)
+                      
+                              const {web} = await sp.site.openWebById(subsite[0].Id)
+                             // end
+                             // get the details of the file present inside the document library
+                             const file=  web.getFileById(filterData.FileUID.FileUID);
+                             const listItem = await file.getItem();        
+                             const updatedData =await listItem.update({
+                               Status:"Approved"  
+                             });
+                             console.log("updatedData",updatedData);
+                            } catch (error) {
+                              console.log(error , "Error updating status column on Libray or Folder");
+                            }
+    
+                      }
+    
+                  }
+            }
+           
+          })
+    
+        }else{
+          setFinalStatus="Approved";
+          console.log("Level is not equal to max level",Level);
+          console.log("FinalStatus",setFinalStatus);
+    
+    
+        }
+    
+    } catch (error) {
+      console.error("Error fetching list items:", error);
+    }
+    // end
+                
+              payload={
+                  Log:setFinalStatus,
+                  LogHistory:isoDate,
+                  Remark:remark,
+                  // ApprovedLevel:approvedLevel
+              }
+          }else{
+            // alert(`here approved and ${props.actingforuseremail} acting for is not null`)
+            const updatedData = await sp.web.lists.getByTitle("DMSFileApprovalList").items
+            .select("FileUID", "ID", "ApproveAction", "ApprovedLevel", "SiteName", "DocumentLibraryName", "ApprovedLevel" , "FilePreviewUrl")
+            .filter(`FileUID eq '${filterData.FileUID.FileUID}'`)()
+            .catch((error) => console.error("Error fetching data from DMSFileApprovalList:", error));
+            console.log(updatedData , "updatedData")
+            
+            if (updatedData && updatedData.length > 0) {
+              const mydat = updatedData[0]; // Assuming you want to compare using the first item's SiteName
+              filepreviewurl =  mydat?.FilePreviewUrl
+              console.log(mydat?.FilePreviewUrl , "items,,,,")
+              approvedLevel = mydat.ApprovedLevel
+              // Step 3: Fetch data from the second list where SiteName matches
+              const updatedata2 = await sp.web.lists.getByTitle("DMSFolderPermissionMaster").items
+              .filter(`SiteName eq '${mydat.SiteName}' and DocumentLibraryName eq '${mydat.DocumentLibraryName}' and Level eq ${mydat.ApprovedLevel}`)()
+                .catch((error:any) => console.error("Error fetching data from DMSFolderPermissionMaster:", error));
+              
+                const getTaskdata = await sp.web.lists.getByTitle("DMSFileApprovalTaskList").items.filter(`FileUID/FileUID eq '${filterData.FileUID.FileUID}'`) 
+                .select("FileUID/FileUID", "MasterApproval/ApprovalType", "CurrentUser", "Log") 
+                .expand("FileUID", "MasterApproval")()
+                console.log(getTaskdata ,"getTaskdata")
+              console.log(updatedata2 , "here is my data");
+             
+              getTaskdata.forEach(item => {
+                console.log(item.CurrentUser , "CurrentUser")
+                  // Step 1: Check if CurrentUser matches the stored user
+                  if (item.CurrentUser === currentUserEmailRef.current || item.CurrentUser === props.actingforuseremail) {
+                    // Step 2: Check ApprovalType
+                    if (item.MasterApproval.ApprovalType === 0) {
+                      console.log(approvedLevel, "approvedLevel first in 0")
+                      // If ApprovalType is 0, set state to 'done'
+                      setApprovedStatus('Approved');
+                      console.log("entere here in 0 for approval level" ,filterData.FileUID.FileUID , mydat.ApprovedLevel )
+                       console.log("entere here in 0" , ApprovedStatus)
+                       approvedLevel =mydat.ApprovedLevel+1
+                       setFinalStatus = "Approved"
+                       console.log(approvedLevel, "approvedLevel second in 1")
+                    } else if (item.MasterApproval.ApprovalType === 1) {
+                      // Step 3: If ApprovalType is 1, check the Log field
+                      let nonNullLogCount = 0;
+                      let totalItems = getTaskdata.length;
+          
+                      getTaskdata.forEach(logItem => {
+                        if (logItem.Log !== null) {
+                          nonNullLogCount++;
+                        }
+                      });
+          
+                      // If more than 5 out of 6 Logs are not null, set 'approvalInProgress'
+                      if (nonNullLogCount >= totalItems - 1) {
+                        console.log(approvedLevel, "approvedLevel first in 1")
+                        approvedLevel =mydat.ApprovedLevel+1
+                        setFinalStatus = "Approved"
+                        setApprovedStatus('Approved');
+                        console.log("entere here in 1 for approval level" ,filterData.FileUID.FileUID , mydat.ApprovedLevel+1 )
+                        console.log("entere here in 1" , ApprovedStatus)
+                        console.log(approvedLevel, "approvedLevel second in 1")
+                      }else{
+                        // thhis i have added
+                          setFinalStatus = "Approved"
+                      }
+                    }
+                  }
+                });
+              
+            } else {
+              console.log("No matching data found in DMSFileApprovalList."); 
+            }
+             //start
+    try {
+      const updatedData1:any = await sp.web.lists.getByTitle("DMSFileApprovalList").items
+      .select("FileUID", "ID", "ApproveAction", "ApprovedLevel", "SiteName", "DocumentLibraryName", "ApprovedLevel" , "FilePreviewUrl")
+      .filter(`FileUID eq '${FileUID}'`)()
+      .catch((error) => console.error("Error fetching data from DMSFileApprovalList:", error));
+      console.log(updatedData1 , "updatedData")
+    
+    
+        filepreviewurl = updatedData1[0]?.FilePreviewUrl;
+        Level = updatedData1[0].ApprovedLevel;
+        console.log(updatedData1[0] , "DocumentLibraryName")
+    
+        const getdatafromfoldermaster = await sp.web.lists.getByTitle("DMSFolderPermissionMaster").items
+        .filter(`SiteName eq '${updatedData1[0].SiteName}' and DocumentLibraryName eq '${updatedData1[0].DocumentLibraryName}'`)()
+        console.log(getdatafromfoldermaster , "getdatafromfoldermaster")
+       
+        let maxLevel=0;
+        getdatafromfoldermaster.forEach((item)=>{
+          if(item.Level >= maxLevel){
+            maxLevel=item.Level;
+          }
+        })
+    
+        console.log("MaxLevel ",maxLevel);
+    
+        if(Level === maxLevel){
+    
+          const taskdata = await sp.web.lists.getByTitle("DMSFileApprovalTaskList").items.filter(`FileUID/FileUID eq '${filterData.FileUID.FileUID}'`)
+          .select("FileUID/FileUID", "MasterApproval/ApprovalType", "CurrentUser", "Log")
+          .expand("FileUID", "MasterApproval")()
+    
+          console.log("getData from DMSFileApprovalTaskList",taskdata);
+    
+          taskdata.forEach(async (item)=>{
+            if(item.CurrentUser === currentUserEmailRef.current || item.CurrentUser === props.actingforuseremail){
+    
+                  if(item.MasterApproval.ApprovalType === 0){
+                        setFinalStatus="FinalApproved";
+                        try {
+                          await sp.web.lists.getByTitle("DMSFileApprovalList").items
+                          .filter(`FileUID eq '${filterData.FileUID.FileUID}'`)()
+                          .then(async (items) => {
+                              if (items.length > 0) {
+                                  const itemId = items[0].Id; // Assuming one item per FileUID
+                                  // alert(`${itemId} item id is 1`)
+                                  await sp.web.lists.getByTitle("DMSFileApprovalList").items.getById(itemId).update({
+                                      Status: "Approved",
+                                  });
+                                  console.log("Updated DMSFileApprovalList with Approved status");
+                                  // alert(`${itemId} Updated DMSFileApprovalList with Approved status`)
+                              }
+                          });
+                          
+                        } catch (error) {
+                           console.log(error , "Error updating DMSFileApprovalList status");
+                        }
+                        try {
+                          // Update Column Status on Document library or folder
+                          // updatedData1[0].DocumentLibraryName
+                          // FileUID
+                          // New code start
+                          const siteName=updatedData1[0].SiteName
+                         // console.log("siteName",siteName);
+                         const subsite = await sp.web.webs.filter(`Title eq '${siteName}'`)();
+                         // console.log(subsite , "subsite");
+                         // console.log("subsite id",subsite[0].Id)
+                  
+                          const {web} = await sp.site.openWebById(subsite[0].Id)
+                         // end
+                         // get the details of the file present inside the document library
+                         const file=  web.getFileById(filterData.FileUID.FileUID);
+                         const listItem = await file.getItem();        
+                         const updatedData =await listItem.update({
+                           Status:"Approved"  
+                         });
+                         console.log("updatedData",updatedData);
+                        } catch (error) {
+                          console.log(error , "Error updating status column on Libray or Folder");
+                        }
+                       
+                      
+                  }else if(item.MasterApproval.ApprovalType === 1){
+    
+                      let approvedUser=0;
+                      let numberOfUser=taskdata.length;
+    
+                      taskdata.forEach(logItem => {
+                        if (logItem.Log !== null) {
+                          approvedUser++;
+                        }
+                      });
+    
+                      if(approvedUser >= numberOfUser - 1){
+                            setFinalStatus="FinalApproved";
+                            try {
+                              await sp.web.lists.getByTitle("DMSFileApprovalList").items
+                              .filter(`FileUID eq '${filterData.FileUID.FileUID}'`)()
+                              .then(async (items) => {
+                                  if (items.length > 0) {
+                                      const itemId = items[0].Id; // Assuming one item per FileUID
+                                      // alert(`${itemId} item id is 2`)
+                                      await sp.web.lists.getByTitle("DMSFileApprovalList").items.getById(itemId).update({
+                                          Status: "Approved",
+                                      });
+                                      console.log("Updated DMSFileApprovalList with Approved status");
+                                      // alert(`${itemId} Updated DMSFileApprovalList with Approved status`)
+                                  }
+                              });
+                            } catch (error) {
+                               console.log(error , "Error updating DMSFileApprovalList status");
+                            }
+                            try {
+                              // Update Column Status on Document library or folder
+                              // updatedData1[0].DocumentLibraryName
+                              // FileUID
+                              // New code start
+                              const siteName=updatedData1[0].SiteName
+                             // console.log("siteName",siteName);
+                             const subsite = await sp.web.webs.filter(`Title eq '${siteName}'`)();
+                             // console.log(subsite , "subsite");
+                             // console.log("subsite id",subsite[0].Id)
+                      
+                              const {web} = await sp.site.openWebById(subsite[0].Id)
+                             // end
+                             // get the details of the file present inside the document library
+                             const file=  web.getFileById(filterData.FileUID.FileUID);
+                             const listItem = await file.getItem();        
+                             const updatedData =await listItem.update({
+                               Status:"Approved"  
+                             });
+                             console.log("updatedData",updatedData);
+                            } catch (error) {
+                              console.log(error , "Error updating status column on Libray or Folder");
+                            }
+    
+                      }
+    
+                  }
+            }
+           
+          })
+    
+        }else{
+          setFinalStatus="Approved";
+          console.log("Level is not equal to max level",Level);
+          console.log("FinalStatus",setFinalStatus);
+    
+    
+        }
+    
+    } catch (error) {
+      console.error("Error fetching list items:", error);
+    }
+    // end
+                
+              payload={
+                  Log:setFinalStatus,
+                  LogHistory:isoDate,
+                  Remark:remark,
+                  // ApprovedLevel:approvedLevel
+              }
+          }
+      
         }
         else if(buttonText === "Reject"){
           setFinalStatus = 'Rejected'
             payload={
-                Log:setFinalStatus,
+                Log:Number(setFinalStatus),
                 LogHistory:isoDate,
                 Remark:remark,
                 // ApprovedLevel:approvedLevel
             }
-        }else if(buttonText === "Rework"){
+            const data=await sp.web.lists.getByTitle('DMSFileApprovalList').items.select("ID","ApproveAction","ApprovedLevel").filter(` FileUID eq '${filterData.FileUID.FileUID}'`)();
+  
+         console.log("data ",data);
+        const id=data[0].Id;
+  
+        const updateddata1=await sp.web.lists.getByTitle("DMSFileApprovalList").items.getById(id).update( { ApproveAction: 'Rejected' });
+            
+        }
+        else if(buttonText === "Rework"){
           setFinalStatus = 'Rework'
           payload={
               Log:setFinalStatus,
@@ -547,8 +901,8 @@ declare global {
         console.log("Updated data",updateddata)
         if(buttonText === "Rework"){
           setFinalStatus = 'Rework'
-          alert(`this is SiteName ${filterData.FileUID.SiteName}`)
-          alert(`this is Filereqno ${filterData.FileUID.RequestNo}`)
+          // alert(`this is SiteName ${filterData.FileUID.SiteName}`)
+          // alert(`this is Filereqno ${filterData.FileUID.RequestNo}`)
           const updateStatusinMaster = await sp.web.lists.getByTitle(`DMS${filterData.FileUID.SiteName}FileMaster`).items.filter(`RequestNo eq '${filterData.FileUID.RequestNo}'`)()
           console.log(updateStatusinMaster , "updateStatusinMaster")
           for (let item of updateStatusinMaster) { 
@@ -563,7 +917,7 @@ declare global {
       if (getTaskdata && getTaskdata.length > 0) {
           console.log(getTaskdata, "getTaskdatagetTaskdata");
           for (const item of getTaskdata) {
-            alert(item.ID)
+            // alert(item.ID)
               await sp.web.lists.getByTitle("DMSFileApprovalTaskList").items.getById(item.ID).delete();
           }
       } else {
@@ -590,63 +944,120 @@ declare global {
         console.log("updateddata1",updateddata1);
        
     }
-    const iframe = document.getElementById("filePreview") as HTMLIFrameElement;
+    // const iframe = document.getElementById("filePreview") as HTMLIFrameElement;
     // const spinner = document.getElementById("spinner") as HTMLElement;
   
     // Show the spinner and hide the iframe initially
     // spinner.style.display = "block";
-    if(iframe){
-      // iframe.style.display = "none";
-      iframe.src = filepreviewurl;
-    }
+    // if(iframe){
+    //   // iframe.style.display = "none";
+    //   iframe.src = filepreviewurl;
+    // }
   
   
     // Add an onload event listener to the iframe
-    if(iframe){
+    // if(iframe){
   
-      iframe.onload = () => {
-        console.log("Iframe has loaded");
+    //   iframe.onload = () => {
+    //     console.log("Iframe has loaded");
     
-        const checkAndHideButton = () => {
-          try {
-            const iframeDocument = iframe.contentDocument || iframe.contentWindow?.document;
-            if (iframeDocument) {
-              const button = iframeDocument.getElementById("OneUpCommandBar") as HTMLElement;
-              const excelToolbar = iframeDocument.getElementById("m_excelEmbedRenderer_m_ewaEmbedViewerBar") as HTMLElement;
-              if(excelToolbar){
-                excelToolbar.style.display= "none"
-              }
-              if (button) {
-                console.log("Hiding the OneUpCommandBar element");
-                button.style.display = "none";
+    //     const checkAndHideButton = () => {
+    //       try {
+    //         const iframeDocument = iframe.contentDocument || iframe.contentWindow?.document;
+    //         if (iframeDocument) {
+    //           const button = iframeDocument.getElementById("OneUpCommandBar") as HTMLElement;
+    //           const excelToolbar = iframeDocument.getElementById("m_excelEmbedRenderer_m_ewaEmbedViewerBar") as HTMLElement;
+    //           if(excelToolbar){
+    //             excelToolbar.style.display= "none"
+    //           }
+    //           if (button) {
+    //             console.log("Hiding the OneUpCommandBar element");
+    //             button.style.display = "none";
     
-                // Hide the spinner and show the iframe after the button is hidden
-                // spinner.style.display = "none";
-                iframe.style.display = "block"; 
+    //             // Hide the spinner and show the iframe after the button is hidden
+    //             // spinner.style.display = "none";
+    //             iframe.style.display = "block"; 
     
-               // Exit the loop once the button is found and hidden
-              } else {
-                console.log("OneUpCommandBar not found, rechecking...");
-              }
+    //            // Exit the loop once the button is found and hidden
+    //           } else {
+    //             console.log("OneUpCommandBar not found, rechecking...");
+    //           }
               
-              const helpbutton = iframeDocument.getElementById("m_excelEmbedRenderer_m_ewaEmbedViewerBar") as HTMLElement; 
-              if(helpbutton){
-                helpbutton.style.display = "none"
+    //           const helpbutton = iframeDocument.getElementById("m_excelEmbedRenderer_m_ewaEmbedViewerBar") as HTMLElement; 
+    //           if(helpbutton){
+    //             helpbutton.style.display = "none"
+    //           }
+    //         }
+    //       } catch (error) {
+    //         console.error("Error accessing iframe content:", error);
+    //       }
+    
+    //       // Re-check after a short delay if the button wasn't found
+    //       setTimeout(checkAndHideButton, 100);
+    //     };
+    
+    //     // Start checking for the button
+    //     checkAndHideButton();
+    //   };
+    // }
+    const previewFile = async (previewUrl: string) => {
+      try {
+        console.log("Previewing file at URL:", previewUrl);
+        const iframe = document.getElementById("filePreview") as HTMLIFrameElement;
+        const spinner = document.getElementById("spinner") as HTMLElement;
+    
+        // Show the spinner and hide the iframe initially
+        spinner.style.display = "block";
+        iframe.style.display = "none";
+        iframe.src = previewUrl;
+    
+        // Add an onload event listener to the iframe
+        iframe.onload = () => {
+          console.log("Iframe has loaded");
+    
+          const checkAndHideButton = () => {
+            try {
+              const iframeDocument = iframe.contentDocument || iframe.contentWindow?.document;
+              if (iframeDocument) {
+                const button = iframeDocument.getElementById("OneUpCommandBar") as HTMLElement;
+                const excelToolbar = iframeDocument.getElementById("m_excelEmbedRenderer_m_ewaEmbedViewerBar") as HTMLElement;
+                if(excelToolbar){
+                  excelToolbar.style.display= "none"
+                }
+                if (button) {
+                  console.log("Hiding the OneUpCommandBar element");
+                  button.style.display = "none";
+    
+  
+                  spinner.style.display = "none";
+                  iframe.style.display = "block"; 
+  
+  
+                } else {
+                  console.log("OneUpCommandBar not found, rechecking...");
+                }
+                
+                const helpbutton = iframeDocument.getElementById("m_excelEmbedRenderer_m_ewaEmbedViewerBar") as HTMLElement; 
+                if(helpbutton){
+                  helpbutton.style.display = "none"
+                }
               }
+            } catch (error) {
+              console.error("Error accessing iframe content:", error);
             }
-          } catch (error) {
-            console.error("Error accessing iframe content:", error);
-          }
     
-          // Re-check after a short delay if the button wasn't found
-          setTimeout(checkAndHideButton, 100);
+  
+            setTimeout(checkAndHideButton, 100);
+          };
+    
+  
+          checkAndHideButton();
         };
-    
-        // Start checking for the button
-        checkAndHideButton();
-      };
-    }
-   
+      } catch (error) {
+        console.error("Error previewing file:", error);
+      }
+  
+    };
     return (
      
             <div>
@@ -659,101 +1070,21 @@ declare global {
                       <div className="row">
                         <div className="col-12">
                          
-                          <div>
-                            <div className="DMSMasterContainer">
-                                {/* <h4 className="page-title fw-bold mb-1 font-20">Settings</h4> */}
-                                <div className="" style={{ backgroundColor: 'white', border:'1px solid #54ade0', marginTop:'20px', borderRadius:'20px', padding: '15px'}}>
-                                    <table className="mtbalenew">
-                                      <thead >
-                                        <tr>
-                                          <th
-                                            style={{
-                                            minWidth: '40px',
-                                            maxWidth: '40px',
-                                           
-                                            }}
-                                          >
-                                               S.No
-                                          </th>
-                                          <th>Request ID</th>
-                                          {/* <th style={{ minWidth: '120px', maxWidth: '120px' }}>Process Name</th> */}
-                                          <th >Log</th>
-                                          <th>Log History</th>
-                                          <th>Requested By</th>
-                                          <th style={{ minWidth: '150px', maxWidth: '150px' }}>Requested Date</th>
-                                          <th style={{ minWidth: '80px', maxWidth: '80px' }}>Status</th>
-                                          <th
-                                            style={{
-                                            minWidth: '70px',
-                                            maxWidth: '70px',
-                                           
-                                            }}
-                                            >
-                                              Remark
-                                            </th>
-                                          </tr>
-                                        </thead>
-                                        <tbody style={{ maxHeight: '8007px' }}>
-         
-                                              {Mylistdata.length > 0  ? Mylistdata.map((item, index) => {
-                                              return(
-                                                    <tr>
-                                                      <td style={{ minWidth: '40px', maxWidth: '40px' }}>
-                                                        <span style={{marginLeft:'0px'}} className="indexdesign">
-                                                        {index}</span></td>
-                                                      <td>{(truncateText(item.FileUID.RequestNo, 20))}
-                                                      </td>
-                                                      <td >{
-                                                        item.Log
-                                                        }</td>
-                                                        <td>
-                                                          
-                                                       
-                                                             {item.LogHistory}
-  
-                                                         </td>
-                                                      <td >{(truncateText(item.FileUID.RequestedBy, 25))}</td> 
-                                                      <td style={{ minWidth: '150px', maxWidth: '150px' }}>
-                                                          <div
-                                                            style={{
-                                                              padding: '5px',
-                                                              border: '1px solid #efefef',
-                                                              background: '#fff',
-                                                              borderRadius: '30px',fontSize:'14px',
-                                                            
-                                                            }}
-                                                            className="btn btn-light"
-                                                          >
-                                                            {item.FileUID.Created}
-                                                          </div>
-                                                      </td>
-                                                      <td style={{ minWidth: '80px', maxWidth: '80px', textAlign:'center' }}>
-                                                          {/* <div className="finish mb-0"></div> */}
-                                                          <div className="finish mb-0">  {item.FileUID.Status} </div>
-                                                          </td>
-                                                      {/* <td style={{ minWidth: '70px', maxWidth: '70px' }}>
-                                                            <a onClick={(e )=>getTaskItemsbyID(e , item.FileUID.FileUID)}>
-                                                                <FontAwesomeIcon icon={faEye} />
-                                                            </a>
-                                                      </td> */}
-                                                      <td style={{ minWidth: '70px', maxWidth: '70px' }}>
-                                                        {item.Remark}
-                                                      </td>
-                                                      </tr>
-                                                        )
-                                                              })
-                                                            :""
-                                                        }       
-                                      </tbody>
-                                </table>
-                            </div>
+                     
+                      <div className="" style={{ backgroundColor: 'white', border:'1px solid #54ade0', marginTop:'20px', borderRadius:'20px', padding: '15px'}}>
+                      <h4>Basic Information</h4>
+                      <div id="dynamicDetailsContainer"></div>
+                      </div>
+                      <div className="" style={{ backgroundColor: 'white', border:'1px solid #54ade0', marginTop:'20px', borderRadius:'20px', padding: '15px'}}>
+                        <div >
+                        <h1>File Preview</h1>
+                        <div id="spinner" style={{display: "none"}}>Loading...</div>
+                        <iframe id="filePreview" width="100%" height="400"></iframe>
                         </div>
-                      </div> 
-  
-                          
+                      </div>     
                     {toggleLog && (
                                   <div className="" style={{ backgroundColor: 'white', border:'1px solid #54ade0', marginTop:'20px', borderRadius:'20px', padding: '15px'}}>
-   <iframe id="filePreview" width="100%" height="400"></iframe>
+  
                            <div className="">
                             <div className="">
                             
@@ -811,12 +1142,12 @@ declare global {
                                       Reject
                                     </button>
                                   </a>
-                                  <button
+                                  {/* <button
                                     type="button"
                                     className="btn btn-light waves-effect waves-light m-1"
                                   >
                                     <i className="fe-x me-1"></i> Cancel
-                                  </button>
+                                  </button> */}
                                 </div>
                               </div>
                             </div>
@@ -824,7 +1155,109 @@ declare global {
                       </div>
                         
                     )}
-                          
+                               <div>
+                            <div className="DMSMasterContainer">
+                                {/* <h4 className="page-title fw-bold mb-1 font-20">Settings</h4> */}
+                                <div className="" style={{ backgroundColor: 'white', border:'1px solid #54ade0', marginTop:'20px', borderRadius:'20px', padding: '15px'}}>
+                                    <table className="mtbalenew">
+                                      <thead >
+                                        <tr>
+                                          <th
+                                            style={{
+                                            minWidth: '40px',
+                                            maxWidth: '40px',
+                                           
+                                            }}
+                                          >
+                                               S.No
+                                          </th>
+                                          <th>Level</th>
+                                          {/* <th style={{ minWidth: '120px', maxWidth: '120px' }}>Process Name</th> */}
+                                          <th >Assigned To</th>
+                                          <th>Requester Name</th>
+                                          <th>Requested Date</th>
+                                          <th style={{ minWidth: '150px', maxWidth: '150px' }}>Action Taken By</th>
+                                          <th style={{ minWidth: '150px', maxWidth: '150px' }}>Action Taken On</th>
+                                          <th
+                                            style={{
+                                            minWidth: '70px',
+                                            maxWidth: '70px',
+                                           
+                                            }}
+                                            >
+                                              Remark
+                                            </th>
+                                          <th style={{ minWidth: '80px', maxWidth: '80px' }}>Status</th>
+                                         
+                                          </tr>
+                                        </thead>
+                                        <tbody style={{ maxHeight: '8007px' }}>
+         
+                                              {Mylistdata.length > 0  ? Mylistdata.map((item, index) => {
+                                              return(
+                                                    <tr>
+                                                      <td style={{ minWidth: '40px', maxWidth: '40px' }}>
+                                                        <span style={{marginLeft:'0px'}} className="indexdesign">
+                                                        {index+1}</span></td>
+                                                      <td>
+                                                        {/* {(truncateText(item?.FileUID?.RequestNo, 20))} */}
+                                                        {item?.MasterApproval?.Level}
+                                                      </td>
+                                                      <td >{
+                                                        item?.AssignedToTitle
+                                                        }</td>
+                                                        <td>
+                                                          
+                                                       
+                                                             {item.RequestedByTitle}
+  
+                                                         </td>
+                                                      <td >
+                                                      {new Date(item?.FileUID?.Created).toLocaleString('en-US', { 
+  month: '2-digit',
+  day: '2-digit',
+  year: 'numeric',
+  // hour: '2-digit',
+  // minute: '2-digit',
+  // second: '2-digit',
+  // hour12: true 
+})}
+
+                                                        </td> 
+                                                      <td style={{ minWidth: '150px', maxWidth: '150px' }}>
+                                                          <div
+                                                            style={{
+                                                              padding: '5px',
+                                                              border: '1px solid #efefef',
+                                                              background: '#fff',
+                                                              borderRadius: '30px',fontSize:'14px',
+                                                            
+                                                            }}
+                                                            className="btn btn-light"
+                                                          >
+                                                            {item?.AssignedToTitle}
+                                                            
+                                                          </div>
+                                                      </td>
+                                                  
+                                                
+                                                      <td style={{ minWidth: '70px', maxWidth: '70px' }}>
+                                                        {item.Remark}
+                                                      </td>
+                                                      <td style={{ minWidth: '80px', textAlign:'center' }}>
+                                                          {/* <div className="finish mb-0"></div> */}
+                                                          <div className="finish mb-0">  {item.FileUID.Status} </div>
+                                                          </td>
+                                                      </tr>
+                                                        )
+                                                              })
+                                                            :""
+                                                        }       
+                                      </tbody>
+                                </table>
+                            </div>
+                        </div>
+                         </div>
                         </div>
                       </div>
                     </div>
